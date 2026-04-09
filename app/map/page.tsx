@@ -1,29 +1,24 @@
 "use client";
 
-import "leaflet/dist/leaflet.css";
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { locationData } from "@/lib/locationData";
 import { useLocationContext } from "@/context/LocationContext";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 
-export default function MapPage() {
+const MapClient = dynamic(() => import("./MapClient"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[560px] w-full items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 text-slate-500">
+      Loading map...
+    </div>
+  ),
+});
+
+function MapPageContent() {
   const searchParams = useSearchParams();
   const message = searchParams.get("message");
   const { selectedLocation, setSelectedLocation } = useLocationContext();
-
-  let customIcon: any = undefined;
-
-  if (typeof window !== "undefined") {
-    const L = require("leaflet");
-
-    customIcon = new L.Icon({
-      iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-    });
-  }
 
   const selectedLocationSummary = useMemo(() => {
     if (!selectedLocation) {
@@ -145,49 +140,14 @@ export default function MapPage() {
               </div>
             </div>
 
-            <div className="h-[560px] w-full overflow-hidden rounded-3xl border border-slate-200">
-              <MapContainer
-                center={[39.5, -98.35]}
-                zoom={4}
-                scrollWheelZoom={true}
-                className="h-full w-full"
-              >
-                <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-
-                {locationData.map((location) => (
-                  <Marker
-                    key={location.name}
-                    position={location.position}
-                    icon={customIcon}
-                    eventHandlers={{
-                      click: () =>
-                        setSelectedLocation({
-                          name: location.name,
-                          electricityRate: location.electricityRate,
-                          solarScore: location.solarScore,
-                          note: location.note,
-                        }),
-                    }}
-                  >
-                    <Popup>
-                      <div className="space-y-1">
-                        <h3 className="font-semibold">{location.name}</h3>
-                        <p>Electricity Rate: ${location.electricityRate}/kWh</p>
-                        <p>Solar Score: {location.solarScore}/10</p>
-                        <p>{location.note}</p>
-                      </div>
-                    </Popup>
-                  </Marker>
-                ))}
-              </MapContainer>
-            </div>
+            <MapClient
+              locationData={locationData}
+              setSelectedLocation={setSelectedLocation}
+            />
           </div>
 
           <div className="space-y-6">
-            <section className="rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-slate-900 to-emerald-950 p-6 shadow-lg text-white">
+            <section className="rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-slate-900 to-emerald-950 p-6 text-white shadow-lg">
               <p className="text-sm text-emerald-200">How to use this tab</p>
               <h2 className="mt-2 text-2xl font-semibold">
                 Select a state to drive pricing assumptions
@@ -278,5 +238,23 @@ export default function MapPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function MapPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-950 px-6 py-10 md:px-10">
+          <div className="mx-auto max-w-7xl">
+            <div className="flex h-[300px] items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-slate-300">
+              Loading map page...
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <MapPageContent />
+    </Suspense>
   );
 }
