@@ -1,0 +1,237 @@
+@page "/"
+@using System.Net.Http.Json
+@using RenewableDashboard.Core.DTOs
+@using RenewableDashboard.Core.Interfaces
+@using RenewableDashboard.Web.Services
+@using Microsoft.AspNetCore.Components.Routing
+@inject IMarketService MarketService
+@inject LocationStateService LocationState
+@inject CalculatorStateService CalculatorState
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>Renewable Dashboard</PageTitle>
+
+<div class="dashboard-page">
+    <div class="dashboard-container">
+        <section class="hero-section">
+            <div class="hero-grid cols-2-wide">
+                <div>
+                    <div class="badge">U.S. Renewable Energy Investment Analysis</div>
+                    <h1 class="hero-title">Make smarter renewable energy investment decisions</h1>
+                    <p class="hero-text">
+                        Explore market signals, evaluate project economics, compare
+                        location-based pricing, and use AI to interpret real dashboard
+                        context in one connected workflow.
+                    </p>
+
+                    <div class="btn-row">
+                        <a href="/calculator" class="btn btn-primary">Start with Calculator</a>
+                        <a href="/map" class="btn btn-secondary">View Map Insights</a>
+                        <a href="/assistant" class="btn btn-accent">Open AI Assistant</a>
+                    </div>
+
+                    <div class="pill-row">
+                        <span class="pill">Market signals</span>
+                        <span class="pill">Location comparison</span>
+                        <span class="pill">Financial modeling</span>
+                        <span class="pill">AI-backed interpretation</span>
+                    </div>
+                </div>
+
+                <div class="glass-panel">
+                    <p class="panel-label">Dashboard Snapshot</p>
+                    <div class="stat-grid cols-2">
+                        <div class="stat-card">
+                            <p class="stat-label">Electricity Price</p>
+                            <p class="stat-value">@FormatPrice(_marketData?.ElectricityPrice)</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Capacity Growth</p>
+                            <p class="stat-value emerald">@FormatPercent(_marketData?.CapacityGrowth)</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Renewable Share</p>
+                            <p class="stat-value blue">@FormatWholePercent(_marketData?.RenewableShare)</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Project NPV</p>
+                            <p class="stat-value">@NpvValue</p>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box">
+                        <p class="stat-label" style="color: var(--emerald-200);">Selected Location</p>
+                        <p class="stat-value">@LocationValue</p>
+                        <p class="hero-text" style="margin-top: 0.5rem; font-size: 0.875rem;">
+                            @LocationDetail
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (_loading)
+        {
+            <section class="kpi-grid cols-4">
+                @for (var i = 0; i < 4; i++)
+                {
+                    <div class="skeleton-card"><div style="height: 4rem;"></div></div>
+                }
+            </section>
+        }
+        else
+        {
+            <section class="kpi-grid cols-4">
+                <div class="kpi-card emerald">
+                    <div class="kpi-header">
+                        <p class="kpi-title">U.S. Electricity Price</p>
+                        <span class="kpi-tag emerald">EIA</span>
+                    </div>
+                    <p class="kpi-value">$@(_marketData?.ElectricityPrice.ToString("F3") ?? "0.000")</p>
+                    <p class="kpi-subtitle">per kWh</p>
+                    <div class="progress-bar"><div class="progress-fill" style="width: 72%;"></div></div>
+                </div>
+
+                <div class="kpi-card blue">
+                    <div class="kpi-header">
+                        <p class="kpi-title">Capacity Growth</p>
+                        <span class="kpi-tag blue">Market</span>
+                    </div>
+                    <p class="kpi-value">@(_marketData?.CapacityGrowth ?? 0)%</p>
+                    <p class="kpi-subtitle">Growth indicator</p>
+                    <div class="progress-bar"><div class="progress-fill blue" style="width: 58%;"></div></div>
+                </div>
+
+                <div class="kpi-card violet">
+                    <div class="kpi-header">
+                        <p class="kpi-title">Selected Location</p>
+                        <span class="kpi-tag violet">Map</span>
+                    </div>
+                    <p class="kpi-value" style="font-size: 1.875rem;">@(LocationState.SelectedLocation?.Name ?? "None")</p>
+                    <p class="kpi-subtitle">
+                        @(LocationState.SelectedLocation is not null
+                            ? $"Rate: ${LocationState.SelectedLocation.ElectricityRate}/kWh"
+                            : "Choose a state from Map")
+                    </p>
+                    <div class="progress-bar"><div class="progress-fill violet" style="width: 46%;"></div></div>
+                </div>
+
+                <div class="kpi-card amber">
+                    <div class="kpi-header">
+                        <p class="kpi-title">Current Project NPV</p>
+                        <span class="kpi-tag amber">Finance</span>
+                    </div>
+                    <p class="kpi-value" style="font-size: 1.875rem;">@NpvValue</p>
+                    <p class="kpi-subtitle">
+                        @(CalculatorState.Snapshot is not null
+                            ? $"Scenario: {CalculatorState.Snapshot.Scenario}"
+                            : "Open Calculator to generate metrics")
+                    </p>
+                    <div class="progress-bar"><div class="progress-fill amber" style="width: 64%;"></div></div>
+                </div>
+            </section>
+        }
+
+        <section class="content-grid cols-2">
+            <div class="white-card">
+                <p class="section-subtitle">Platform Overview</p>
+                <h2 class="section-title">One place for market, map, calculator, and AI workflows</h2>
+                <p class="section-text">
+                    This dashboard helps you move from national market signals to
+                    location-specific pricing, then into project economics and AI
+                    interpretation without jumping across disconnected tools.
+                </p>
+
+                <div class="info-grid cols-3">
+                    <div class="info-box">
+                        <p class="info-box-title">Market</p>
+                        <p class="info-box-text">Review pricing, growth, and renewable share.</p>
+                    </div>
+                    <div class="info-box">
+                        <p class="info-box-title">Map</p>
+                        <p class="info-box-text">Compare state-level electricity rates and opportunity.</p>
+                    </div>
+                    <div class="info-box">
+                        <p class="info-box-title">Calculator</p>
+                        <p class="info-box-text">Evaluate NPV, NOI, and payback with project inputs.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dark-card">
+                <p style="color: var(--emerald-200); font-size: 0.875rem;">AI Assistant</p>
+                <h2 class="section-title" style="color: white; margin-top: 0.5rem;">Ask grounded investment questions</h2>
+                <p class="section-text" style="color: var(--slate-200);">
+                    Use the assistant to interpret dashboard context, selected
+                    locations, and project outputs so you can make faster, more
+                    confident investment decisions.
+                </p>
+
+                <div style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div class="step-box">
+                        <p class="step-title">1. Review market context</p>
+                        <p class="step-text">Start with price, growth, and renewable share.</p>
+                    </div>
+                    <div class="step-box">
+                        <p class="step-title">2. Connect location insights</p>
+                        <p class="step-text">Use the selected state to bring in local pricing context.</p>
+                    </div>
+                    <div class="step-box">
+                        <p class="step-title">3. Interpret project returns</p>
+                        <p class="step-text">Ask AI to explain tradeoffs and economics clearly.</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                    <a href="/assistant" class="btn btn-primary">Open AI Assistant</a>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+@code {
+    private MarketDataDto? _marketData;
+    private bool _loading = true;
+
+    private string LocationValue => LocationState.SelectedLocation?.Name ?? "No location selected";
+
+    private string LocationDetail => LocationState.SelectedLocation is not null
+        ? $"Rate: ${LocationState.SelectedLocation.ElectricityRate}/kWh"
+        : "Choose a state from the Map tab to connect market and project context.";
+
+    private string NpvValue => CalculatorState.Snapshot is not null
+        ? $"${CalculatorState.Snapshot.Npv:N0}"
+        : "Not ready";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LocationState.OnChange += StateHasChanged;
+        CalculatorState.OnChange += StateHasChanged;
+
+        try
+        {
+            _marketData = await MarketService.GetMarketDataAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatPrice(decimal? value) =>
+        value.HasValue ? $"${value.Value:F3}/kWh" : "--";
+
+    private static string FormatPercent(decimal? value) =>
+        value.HasValue ? $"{value.Value:F1}%" : "--";
+
+    private static string FormatWholePercent(decimal? value) =>
+        value.HasValue ? $"{value.Value:F0}%" : "--";
+
+    public void Dispose()
+    {
+        LocationState.OnChange -= StateHasChanged;
+        CalculatorState.OnChange -= StateHasChanged;
+    }
+}

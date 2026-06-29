@@ -1,0 +1,178 @@
+@page "/map"
+@using RenewableDashboard.Core.DTOs
+@using RenewableDashboard.Core.Interfaces
+@using RenewableDashboard.Web.Services
+@using Microsoft.AspNetCore.WebUtilities
+@inject ILocationService LocationService
+@inject LocationStateService LocationState
+@inject MapJsInterop MapJs
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+<PageTitle>Map - Renewable Dashboard</PageTitle>
+
+<div class="dashboard-page">
+    <div class="dashboard-container">
+        <section class="hero-section cyan">
+            <div class="hero-grid cols-2">
+                <div>
+                    <div class="badge cyan">Geographic Insights</div>
+                    <h1 class="hero-title" style="font-size: clamp(2rem, 4vw, 3rem);">Renewable energy location intelligence</h1>
+                    <p class="hero-text">
+                        Compare state-level renewable opportunity signals, select a
+                        location, and push map-based electricity pricing into your
+                        project workflow.
+                    </p>
+                    <div class="pill-row">
+                        <span class="pill">State-level pricing</span>
+                        <span class="pill">Solar score comparison</span>
+                        <span class="pill">Calculator-connected selection</span>
+                    </div>
+                </div>
+
+                <div class="glass-panel">
+                    <p class="panel-label">Selected Location Snapshot</p>
+                    <div class="stat-grid cols-2">
+                        <div class="stat-card span-2">
+                            <p class="stat-label">Location</p>
+                            <p class="stat-value">@SelectedSummary.Title</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Electricity Rate</p>
+                            <p class="stat-value emerald">@SelectedSummary.Rate</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Solar Score</p>
+                            <p class="stat-value blue">@SelectedSummary.Score</p>
+                        </div>
+                    </div>
+                    <div class="highlight-box cyan">
+                        <p style="color: var(--cyan-200); font-size: 0.875rem;">Location Note</p>
+                        <p class="step-text" style="margin-top: 0.5rem;">@SelectedSummary.Note</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (_showSelectMessage)
+        {
+            <section class="alert">
+                <h2 class="alert-title">Please select a location</h2>
+                <p class="alert-text">Choose a state on the map to use map-based electricity pricing in the calculator.</p>
+            </section>
+        }
+
+        <section class="content-grid cols-map">
+            <div class="white-card">
+                <h2 class="section-title" style="font-size: 1.5rem;">U.S. opportunity map</h2>
+                <p class="section-subtitle">Click a marker to update the shared dashboard location context.</p>
+                <div id="renewable-map" class="map-container" style="margin-top: 1rem;"></div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div class="dark-card">
+                    <p style="color: var(--emerald-200); font-size: 0.875rem;">How to use this tab</p>
+                    <h2 class="section-title" style="color: white; font-size: 1.5rem;">Select a state to drive pricing assumptions</h2>
+                    <p class="section-text" style="color: var(--slate-200);">
+                        Clicking a marker updates the shared dashboard context. That
+                        selected electricity rate can then be used in the calculator.
+                    </p>
+                </div>
+
+                <div class="white-card">
+                    <p class="section-subtitle">Tracked Locations</p>
+                    <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+                        @foreach (var location in _locations)
+                        {
+                            var isSelected = LocationState.SelectedLocation?.Name == location.Name;
+                            <button class="location-btn @(isSelected ? "selected" : "")"
+                                    @onclick="() => SelectLocation(location)">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <h3 style="font-weight: 600;">@location.Name</h3>
+                                    <span class="kpi-tag @(isSelected ? "emerald" : "")">@location.SolarScore/10</span>
+                                </div>
+                                <p class="kpi-subtitle" style="margin-top: 0.5rem;">Rate: $@location.ElectricityRate/kWh</p>
+                                <p class="info-box-text" style="margin-top: 0.75rem;">@location.Note</p>
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+@code {
+    private List<LocationMapDto> _locations = [];
+    private bool _showSelectMessage;
+    private DotNetObjectReference<MapJsInterop>? _dotNetRef;
+    private bool _mapInitialized;
+
+    private (string Title, string Rate, string Score, string Note) SelectedSummary
+    {
+        get
+        {
+            if (LocationState.SelectedLocation is null)
+            {
+                return ("No location selected", "--", "--", "Choose a state from the map or the tracked locations panel.");
+            }
+
+            return (
+                LocationState.SelectedLocation.Name,
+                $"${LocationState.SelectedLocation.ElectricityRate}/kWh",
+                $"{LocationState.SelectedLocation.SolarScore}/10",
+                LocationState.SelectedLocation.Note);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LocationState.OnChange += StateHasChanged;
+        _locations = await LocationService.GetAllAsync();
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("message", out var message))
+        {
+            _showSelectMessage = message == "select-location";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _locations.Count > 0 && !_mapInitialized)
+        {
+            _dotNetRef = DotNetObjectReference.Create(MapJs);
+            MapJs.LocationSelected += OnMapLocationSelected;
+            await MapJs.InitializeMapAsync("renewable-map", _locations.ToArray(), _dotNetRef);
+            _mapInitialized = true;
+        }
+    }
+
+    private void OnMapLocationSelected(SelectedLocationDto location)
+    {
+        LocationState.SetSelectedLocation(location);
+    }
+
+    private void SelectLocation(LocationMapDto location)
+    {
+        LocationState.SetSelectedLocation(new SelectedLocationDto
+        {
+            Name = location.Name,
+            ElectricityRate = location.ElectricityRate,
+            SolarScore = location.SolarScore,
+            Note = location.Note
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        LocationState.OnChange -= StateHasChanged;
+        if (MapJs is not null)
+        {
+            MapJs.LocationSelected -= OnMapLocationSelected;
+            await MapJs.DisposeAsync();
+        }
+        _dotNetRef?.Dispose();
+    }
+}
