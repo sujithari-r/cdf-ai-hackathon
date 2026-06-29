@@ -1,0 +1,246 @@
+﻿@page "/"
+@inject MarketService MarketService
+@inject DashboardState State
+@implements IDisposable
+
+<main class="min-h-screen bg-slate-950 px-6 py-10 md:px-10">
+    <div class="mx-auto max-w-7xl space-y-8">
+        <section class="relative overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/50 p-8 shadow-2xl md:p-10">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.18),transparent_30%)]"></div>
+
+            <div class="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+                <div>
+                    <div class="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-sm font-medium text-emerald-300">
+                        U.S. Renewable Energy Investment Analysis
+                    </div>
+
+                    <h1 class="mt-5 max-w-4xl text-4xl font-bold tracking-tight text-white md:text-6xl md:leading-[1.05]">
+                        Make smarter renewable energy investment decisions
+                    </h1>
+
+                    <p class="mt-5 max-w-3xl text-lg leading-8 text-slate-300">
+                        Explore market signals, evaluate project economics, compare
+                        location-based pricing, and use AI to interpret real dashboard
+                        context in one connected workflow.
+                    </p>
+
+                    <div class="mt-8 flex flex-wrap gap-3">
+                        <a href="/calculator" class="inline-flex items-center rounded-xl bg-white px-5 py-3 font-medium text-slate-950 transition hover:bg-slate-100">
+                            Start with Calculator
+                        </a>
+                        <a href="/map" class="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-5 py-3 font-medium text-white transition hover:bg-white/10">
+                            View Map Insights
+                        </a>
+                        <a href="/assistant" class="inline-flex items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-5 py-3 font-medium text-emerald-300 transition hover:bg-emerald-400/15">
+                            Open AI Assistant
+                        </a>
+                    </div>
+
+                    <div class="mt-8 flex flex-wrap gap-3">
+                        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">Market signals</div>
+                        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">Location comparison</div>
+                        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">Financial modeling</div>
+                        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">AI-backed interpretation</div>
+                    </div>
+                </div>
+
+                <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+                    <p class="text-sm uppercase tracking-[0.2em] text-slate-400">Dashboard Snapshot</p>
+
+                    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+                            <p class="text-sm text-slate-400">Electricity Price</p>
+                            <p class="mt-2 text-2xl font-bold text-white">
+                                @(_loading || _market is null ? "--" : $"${_market.ElectricityPrice:F3}/kWh")
+                            </p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+                            <p class="text-sm text-slate-400">Capacity Growth</p>
+                            <p class="mt-2 text-2xl font-bold text-emerald-300">
+                                @(_loading || _market is null ? "--" : $"{_market.CapacityGrowth:F1}%")
+                            </p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+                            <p class="text-sm text-slate-400">Renewable Share</p>
+                            <p class="mt-2 text-2xl font-bold text-blue-300">
+                                @(_loading || _market is null ? "--" : $"{_market.RenewableShare:F0}%")
+                            </p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+                            <p class="text-sm text-slate-400">Project NPV</p>
+                            <p class="mt-2 text-2xl font-bold text-white">@NpvValue</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 rounded-2xl border border-emerald-400/15 bg-emerald-400/10 p-4">
+                        <p class="text-sm text-emerald-200">Selected Location</p>
+                        <p class="mt-1 text-lg font-semibold text-white">@LocationValue</p>
+                        <p class="mt-2 text-sm text-slate-300">
+                            @(State.SelectedLocation is not null
+                                ? $"Rate: ${State.SelectedLocation.ElectricityRate}/kWh"
+                                : "Choose a state from the Map tab to connect market and project context.")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (_loading)
+        {
+            <section class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+                @for (var i = 0; i < 4; i++)
+                {
+                    <div class="rounded-3xl border border-white/10 bg-slate-900 p-6 animate-pulse">
+                        <div class="mb-4 h-4 w-28 rounded bg-slate-700"></div>
+                        <div class="mb-3 h-8 w-24 rounded bg-slate-700"></div>
+                        <div class="h-3 w-40 rounded bg-slate-800"></div>
+                    </div>
+                }
+            </section>
+        }
+        else
+        {
+            <section class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-white to-emerald-50 p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-medium text-slate-600">U.S. Electricity Price</p>
+                        <span class="rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">EIA</span>
+                    </div>
+                    <p class="mt-4 text-4xl font-bold text-slate-900">$@($"{_market?.ElectricityPrice ?? 0:F3}")</p>
+                    <p class="mt-1 text-sm text-slate-500">per kWh</p>
+                    <div class="mt-5 h-1.5 rounded-full bg-emerald-100"><div class="h-1.5 w-[72%] rounded-full bg-emerald-500"></div></div>
+                </div>
+
+                <div class="rounded-3xl border border-blue-400/20 bg-gradient-to-br from-white to-blue-50 p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-medium text-slate-600">Capacity Growth</p>
+                        <span class="rounded-full border border-blue-200 bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">Market</span>
+                    </div>
+                    <p class="mt-4 text-4xl font-bold text-slate-900">@($"{_market?.CapacityGrowth ?? 0}")%</p>
+                    <p class="mt-1 text-sm text-slate-500">Growth indicator</p>
+                    <div class="mt-5 h-1.5 rounded-full bg-blue-100"><div class="h-1.5 w-[58%] rounded-full bg-blue-500"></div></div>
+                </div>
+
+                <div class="rounded-3xl border border-violet-400/20 bg-gradient-to-br from-white to-violet-50 p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-medium text-slate-600">Selected Location</p>
+                        <span class="rounded-full border border-violet-200 bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">Map</span>
+                    </div>
+                    <p class="mt-4 text-3xl font-bold text-slate-900">@(State.SelectedLocation?.Name ?? "None")</p>
+                    <p class="mt-1 text-sm text-slate-500">
+                        @(State.SelectedLocation is not null ? $"Rate: ${State.SelectedLocation.ElectricityRate}/kWh" : "Choose a state from Map")
+                    </p>
+                    <div class="mt-5 h-1.5 rounded-full bg-violet-100"><div class="h-1.5 w-[46%] rounded-full bg-violet-500"></div></div>
+                </div>
+
+                <div class="rounded-3xl border border-amber-400/20 bg-gradient-to-br from-white to-amber-50 p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-medium text-slate-600">Current Project NPV</p>
+                        <span class="rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">Finance</span>
+                    </div>
+                    <p class="mt-4 text-3xl font-bold text-slate-900">
+                        @(State.CalculatorSnapshot is not null ? $"${State.CalculatorSnapshot.Npv:N0}" : "Not ready")
+                    </p>
+                    <p class="mt-1 text-sm text-slate-500">
+                        @(State.CalculatorSnapshot is not null ? $"Scenario: {State.CalculatorSnapshot.Scenario}" : "Open Calculator to generate metrics")
+                    </p>
+                    <div class="mt-5 h-1.5 rounded-full bg-amber-100"><div class="h-1.5 w-[64%] rounded-full bg-amber-500"></div></div>
+                </div>
+            </section>
+        }
+
+        <section class="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <div class="rounded-3xl border border-white/10 bg-white p-7 shadow-xl">
+                <p class="text-sm text-slate-500">Platform Overview</p>
+                <h2 class="mt-2 text-3xl font-semibold text-slate-900">
+                    One place for market, map, calculator, and AI workflows
+                </h2>
+                <p class="mt-4 leading-8 text-slate-600">
+                    This dashboard helps you move from national market signals to
+                    location-specific pricing, then into project economics and AI
+                    interpretation without jumping across disconnected tools.
+                </p>
+
+                <div class="mt-6 grid gap-4 md:grid-cols-3">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p class="text-sm font-semibold text-slate-800">Market</p>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">Review pricing, growth, and renewable share.</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p class="text-sm font-semibold text-slate-800">Map</p>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">Compare state-level electricity rates and opportunity.</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p class="text-sm font-semibold text-slate-800">Calculator</p>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">Evaluate NPV, NOI, and payback with project inputs.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-slate-900 to-emerald-950 p-7 text-white shadow-xl">
+                <p class="text-sm text-emerald-200">AI Assistant</p>
+                <h2 class="mt-2 text-3xl font-semibold">Ask grounded investment questions</h2>
+                <p class="mt-4 leading-8 text-slate-200">
+                    Use the assistant to interpret dashboard context, selected
+                    locations, and project outputs so you can make faster, more
+                    confident investment decisions.
+                </p>
+
+                <div class="mt-6 space-y-3">
+                    <div class="rounded-2xl border border-white/10 bg-white/10 p-4">
+                        <p class="font-medium">1. Review market context</p>
+                        <p class="mt-1 text-sm text-slate-200">Start with price, growth, and renewable share.</p>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-white/10 p-4">
+                        <p class="font-medium">2. Connect location insights</p>
+                        <p class="mt-1 text-sm text-slate-200">Use the selected state to bring in local pricing context.</p>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-white/10 p-4">
+                        <p class="font-medium">3. Interpret project returns</p>
+                        <p class="mt-1 text-sm text-slate-200">Ask AI to explain tradeoffs and economics clearly.</p>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <a href="/assistant" class="inline-flex rounded-xl bg-white px-5 py-3 font-medium text-slate-950 transition hover:bg-slate-100">
+                        Open AI Assistant
+                    </a>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+@code {
+    private MarketData? _market;
+    private bool _loading = true;
+
+    private string LocationValue => State.SelectedLocation?.Name ?? "No location selected";
+
+    private string NpvValue => State.CalculatorSnapshot is not null
+        ? $"${State.CalculatorSnapshot.Npv:N0}"
+        : "Not ready";
+
+    protected override void OnInitialized()
+    {
+        State.OnChange += StateHasChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _market = await MarketService.GetMarketDataAsync();
+        }
+        catch
+        {
+            _market = new MarketData();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public void Dispose() => State.OnChange -= StateHasChanged;
+}

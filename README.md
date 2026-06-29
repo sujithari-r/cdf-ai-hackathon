@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+> **.NET / Blazor / SQL conversion:** A full port of this dashboard to a .NET 9
+> Blazor Web App backed by SQL (EF Core) lives in [`dotnet/`](./dotnet). See
+> [`dotnet/README.md`](./dotnet/README.md) for details and run instructions.
+
 ## Getting Started
 
 First, run the development server:

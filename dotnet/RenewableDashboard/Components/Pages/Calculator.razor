@@ -1,0 +1,473 @@
+@page "/calculator"
+@using Microsoft.EntityFrameworkCore
+@using RenewableDashboard.Data
+@inject CalculatorService Calc
+@inject DashboardState State
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IDbContextFactory<AppDbContext> DbFactory
+@implements IDisposable
+
+<main class="min-h-screen bg-slate-950 px-6 py-10 md:px-10">
+    <div class="mx-auto max-w-7xl space-y-8">
+        <section class="relative overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/55 p-8 shadow-2xl md:p-10">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.14),transparent_30%)]"></div>
+
+            <div class="relative grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+                <div>
+                    <div class="inline-flex rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1 text-sm font-medium text-blue-300">Project Economics</div>
+                    <h1 class="mt-5 text-4xl font-bold tracking-tight text-white md:text-5xl">Renewable project economics calculator</h1>
+                    <p class="mt-4 max-w-3xl text-lg leading-8 text-slate-300">
+                        Evaluate renewable energy project returns using editable assumptions,
+                        selected market inputs, and location-based electricity pricing.
+                    </p>
+                    <div class="mt-8 flex flex-wrap gap-3">
+                        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">Scenario testing</div>
+                        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">Manual vs map pricing</div>
+                        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">Cash flow analysis</div>
+                    </div>
+                </div>
+
+                <div class="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+                    <p class="text-sm uppercase tracking-[0.2em] text-slate-400">Active Run</p>
+                    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div class="rounded-2xl border border-white/10 bg-black/20 p-4 sm:col-span-2">
+                            <p class="text-sm text-slate-400">Scenario</p>
+                            <p class="mt-2 text-2xl font-bold text-white">@ScenarioLabel</p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+                            <p class="text-sm text-slate-400">Rate Source</p>
+                            <p class="mt-2 text-2xl font-bold text-emerald-300">@RateModeLabel</p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
+                            <p class="text-sm text-slate-400">Active Rate</p>
+                            <p class="mt-2 text-2xl font-bold text-blue-300">$@($"{ActiveElectricityRate:F3}")/kWh</p>
+                        </div>
+                    </div>
+                    <div class="mt-5 rounded-2xl border border-emerald-400/15 bg-emerald-400/10 p-4">
+                        <p class="text-sm text-emerald-200">Current Context</p>
+                        <p class="mt-2 text-sm leading-7 text-slate-200">
+                            @(State.SelectedLocation is not null
+                                ? $"{State.SelectedLocation.Name} is available as a map-based pricing source at ${State.SelectedLocation.ElectricityRate}/kWh."
+                                : "No map location selected yet. You can still run manual scenarios or choose a state from the Map tab.")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (State.SelectedLocation is not null)
+        {
+            <section class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 shadow-sm">
+                <h2 class="text-lg font-semibold text-emerald-200">Map selection connected</h2>
+                <p class="mt-1 text-sm text-emerald-100">
+                    @State.SelectedLocation.Name selected — electricity rate available at $@(State.SelectedLocation.ElectricityRate)/kWh
+                </p>
+            </section>
+        }
+
+        <section class="grid grid-cols-1 gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+            <section class="rounded-3xl border border-white/10 bg-white p-6 shadow-xl">
+                <div class="mb-5">
+                    <p class="text-sm text-slate-500">Inputs</p>
+                    <h2 class="mt-2 text-2xl font-semibold text-slate-900">Configure project assumptions</h2>
+                </div>
+
+                <div class="grid grid-cols-1 gap-5">
+                    <div>
+                        <label class="mb-2 block text-sm font-medium text-slate-700">Scenario</label>
+                        <select value="@(Inputs.Scenario == Scenario.Optimistic ? "optimistic" : "base")"
+                                @onchange="OnScenarioChanged"
+                                class="w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-900 outline-none transition focus:border-slate-400">
+                            <option value="base">Base Case</option>
+                            <option value="optimistic">Optimistic Case</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block text-sm font-medium text-slate-700">Rate Source</label>
+                        <select value="@RateModeValue" @onchange="OnRateModeChanged"
+                                class="w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-900 outline-none transition focus:border-slate-400">
+                            <option value="manual">Manual Only</option>
+                            <option value="map">Map Only</option>
+                            <option value="compare">Compare Both</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block text-sm font-medium text-slate-700">System Size (kW)</label>
+                        <input type="number" value="@Inputs.SystemSizeKw" @onchange="@(e => UpdateDouble(e, v => Inputs.SystemSizeKw = v))"
+                               class="w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-900 outline-none transition focus:border-slate-400" />
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block text-sm font-medium text-slate-700">Capacity Factor (%)</label>
+                        <input type="number" value="@Inputs.CapacityFactor" @onchange="@(e => UpdateDouble(e, v => Inputs.CapacityFactor = v))"
+                               class="w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-900 outline-none transition focus:border-slate-400" />
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block text-sm font-medium text-slate-700">Installation Cost ($/W)</label>
+                        <input type="number" step="0.01" value="@Inputs.InstallCostPerW" @onchange="@(e => UpdateDouble(e, v => Inputs.InstallCostPerW = v))"
+                               class="w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-900 outline-none transition focus:border-slate-400" />
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block text-sm font-medium text-slate-700">Manual Electricity Rate ($/kWh)</label>
+                        <input type="number" step="0.01" value="@Inputs.ElectricityRate" @onchange="@(e => UpdateDouble(e, v => Inputs.ElectricityRate = v))"
+                               class="w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-900 outline-none transition focus:border-slate-400" />
+                    </div>
+
+                    <div>
+                        <label class="mb-2 block text-sm font-medium text-slate-700">Annual O&amp;M Cost ($)</label>
+                        <input type="number" value="@Inputs.AnnualOMCost" @onchange="@(e => UpdateDouble(e, v => Inputs.AnnualOMCost = v))"
+                               class="w-full rounded-xl border border-slate-200 bg-white p-3 text-slate-900 outline-none transition focus:border-slate-400" />
+                    </div>
+                </div>
+            </section>
+
+            <section class="space-y-6">
+                <section class="rounded-3xl border border-white/10 bg-white p-6 shadow-xl">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <p class="text-sm text-slate-500">Outputs</p>
+                            <h2 class="mt-2 text-2xl font-semibold text-slate-900">Active project results</h2>
+                        </div>
+                        <div class="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">@ScenarioLabel</div>
+                    </div>
+
+                    <div class="mt-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-4">
+                        <p class="text-sm font-medium text-emerald-700">Active Electricity Rate</p>
+                        <p class="mt-2 text-2xl font-bold text-emerald-900">$@($"{ActiveElectricityRate:F3}") / kWh</p>
+                        <p class="mt-1 text-xs text-emerald-700">@ActiveRateDescription</p>
+                    </div>
+
+                    <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm text-slate-500">Total Project Cost</p>
+                            <p class="mt-2 text-2xl font-bold text-slate-900">$@($"{Active.TotalProjectCost:N0}")</p>
+                            <p class="mt-1 text-sm text-slate-500">Capital requirement</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm text-slate-500">Annual Revenue</p>
+                            <p class="mt-2 text-2xl font-bold text-slate-900">$@($"{Active.AnnualRevenue:N0}")</p>
+                            <p class="mt-1 text-sm text-slate-500">Top-line project revenue</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm text-slate-500">Net Operating Income</p>
+                            <p class="mt-2 text-2xl font-bold text-slate-900">$@($"{Active.NetOperatingIncome:N0}")</p>
+                            <p class="mt-1 text-sm text-slate-500">Revenue minus O&amp;M cost</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm text-slate-500">NPV</p>
+                            <p class="mt-2 text-2xl font-bold text-slate-900">$@($"{Active.Npv:N0}")</p>
+                            <p class="mt-1 text-sm text-slate-500">20 years at 8% discount</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm text-slate-500">Annual Energy Production</p>
+                            <p class="mt-2 text-2xl font-bold text-slate-900">@($"{Active.AnnualEnergyProduction:N0}") kWh</p>
+                            <p class="mt-1 text-sm text-slate-500">Output from system size and capacity factor</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm text-slate-500">Annual Operating Cost</p>
+                            <p class="mt-2 text-2xl font-bold text-slate-900">$@($"{Calc.OmCostForScenario(Inputs):N0}")</p>
+                            <p class="mt-1 text-sm text-slate-500">Scenario-adjusted O&amp;M cost</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                            <p class="text-sm text-slate-500">Simple Payback Period</p>
+                            <p class="mt-2 text-2xl font-bold text-slate-900">
+                                @(Active.PaybackPeriod.HasValue ? $"{Active.PaybackPeriod.Value:F1} years" : "Not achievable")
+                            </p>
+                            <p class="mt-1 text-sm text-slate-500">Based on current net operating income</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex flex-wrap items-center gap-3">
+                        <button @onclick="SaveRunAsync"
+                                class="rounded-2xl bg-slate-900 px-6 py-3 font-medium text-white transition hover:bg-slate-800">
+                            Save run to database
+                        </button>
+                        @if (_savedMessage is not null)
+                        {
+                            <span class="text-sm font-medium text-emerald-600">@_savedMessage</span>
+                        }
+                    </div>
+                </section>
+
+                <section class="rounded-3xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-xl">
+                    <p class="text-sm text-blue-700">How to use this tab</p>
+                    <h2 class="mt-2 text-2xl font-semibold text-slate-900">Turn assumptions into decision-ready outputs</h2>
+                    <div class="mt-5 space-y-3">
+                        <div class="rounded-2xl border border-blue-100 bg-white p-4">
+                            <p class="font-medium text-slate-900">1. Set assumptions</p>
+                            <p class="mt-1 text-sm text-slate-500">Adjust system size, cost, capacity factor, and electricity rate.</p>
+                        </div>
+                        <div class="rounded-2xl border border-blue-100 bg-white p-4">
+                            <p class="font-medium text-slate-900">2. Switch pricing source</p>
+                            <p class="mt-1 text-sm text-slate-500">Compare manual assumptions with map-based electricity pricing.</p>
+                        </div>
+                        <div class="rounded-2xl border border-blue-100 bg-white p-4">
+                            <p class="font-medium text-slate-900">3. Read the outputs</p>
+                            <p class="mt-1 text-sm text-slate-500">Use revenue, NOI, payback, and NPV to judge project viability.</p>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </section>
+
+        @if (Inputs.RateMode == RateMode.Compare)
+        {
+            <section class="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1fr_0.9fr]">
+                <div class="rounded-3xl border border-white/10 bg-white p-6 shadow-xl">
+                    <h2 class="text-2xl font-semibold text-slate-900">Manual Rate Results</h2>
+                    <div class="mt-5 space-y-4">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm text-slate-500">Rate Used</p>
+                            <p class="mt-2 text-xl font-bold text-slate-900">$@($"{Calc.ManualRateForScenario(Inputs):F3}")/kWh</p>
+                        </div>
+                        <div class="space-y-3 text-sm">
+                            <p class="flex justify-between gap-4"><span class="text-slate-500">Annual Revenue</span><span class="font-semibold text-slate-900">$@($"{ManualMetrics.AnnualRevenue:N0}")</span></p>
+                            <p class="flex justify-between gap-4"><span class="text-slate-500">NOI</span><span class="font-semibold text-slate-900">$@($"{ManualMetrics.NetOperatingIncome:N0}")</span></p>
+                            <p class="flex justify-between gap-4"><span class="text-slate-500">Payback</span><span class="font-semibold text-slate-900">@(ManualMetrics.PaybackPeriod.HasValue ? $"{ManualMetrics.PaybackPeriod.Value:F1} years" : "Not achievable")</span></p>
+                            <p class="flex justify-between gap-4"><span class="text-slate-500">NPV</span><span class="font-semibold text-slate-900">$@($"{ManualMetrics.Npv:N0}")</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded-3xl border border-white/10 bg-white p-6 shadow-xl">
+                    <h2 class="text-2xl font-semibold text-slate-900">Map Rate Results</h2>
+                    <div class="mt-5 space-y-4">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm text-slate-500">Rate Used</p>
+                            <p class="mt-2 text-xl font-bold text-slate-900">$@($"{Calc.MapRateForScenario(Inputs, MapRate):F3}")/kWh</p>
+                            <p class="mt-1 text-xs text-slate-500">@(State.SelectedLocation is not null ? $"From {State.SelectedLocation.Name}" : "Fallback/manual equivalent")</p>
+                        </div>
+                        <div class="space-y-3 text-sm">
+                            <p class="flex justify-between gap-4"><span class="text-slate-500">Annual Revenue</span><span class="font-semibold text-slate-900">$@($"{MapMetrics.AnnualRevenue:N0}")</span></p>
+                            <p class="flex justify-between gap-4"><span class="text-slate-500">NOI</span><span class="font-semibold text-slate-900">$@($"{MapMetrics.NetOperatingIncome:N0}")</span></p>
+                            <p class="flex justify-between gap-4"><span class="text-slate-500">Payback</span><span class="font-semibold text-slate-900">@(MapMetrics.PaybackPeriod.HasValue ? $"{MapMetrics.PaybackPeriod.Value:F1} years" : "Not achievable")</span></p>
+                            <p class="flex justify-between gap-4"><span class="text-slate-500">NPV</span><span class="font-semibold text-slate-900">$@($"{MapMetrics.Npv:N0}")</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-xl">
+                    <p class="text-sm text-emerald-700">Comparison Readout</p>
+                    <h2 class="mt-2 text-2xl font-semibold text-slate-900">Difference from map pricing</h2>
+                    <div class="mt-5 space-y-3">
+                        <div class="rounded-2xl border border-emerald-100 bg-white p-4">
+                            <p class="text-sm text-slate-500">Revenue Delta</p>
+                            <p class="@($"mt-2 text-2xl font-bold {(RevenueDelta >= 0 ? "text-emerald-600" : "text-rose-600")}")">@(RevenueDelta >= 0 ? "+" : "")$@($"{RevenueDelta:N0}")</p>
+                        </div>
+                        <div class="rounded-2xl border border-emerald-100 bg-white p-4">
+                            <p class="text-sm text-slate-500">NOI Delta</p>
+                            <p class="@($"mt-2 text-2xl font-bold {(NoiDelta >= 0 ? "text-emerald-600" : "text-rose-600")}")">@(NoiDelta >= 0 ? "+" : "")$@($"{NoiDelta:N0}")</p>
+                        </div>
+                        <div class="rounded-2xl border border-emerald-100 bg-white p-4">
+                            <p class="text-sm text-slate-500">NPV Delta</p>
+                            <p class="@($"mt-2 text-2xl font-bold {(NpvDelta >= 0 ? "text-emerald-600" : "text-rose-600")}")">@(NpvDelta >= 0 ? "+" : "")$@($"{NpvDelta:N0}")</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        }
+
+        <section class="rounded-[28px] border border-white/10 bg-white p-6 shadow-xl md:p-8">
+            <div class="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-sm text-slate-500">Cash Flow</p>
+                    <h2 class="mt-2 text-3xl font-semibold text-slate-900">Project cash flow chart</h2>
+                    <p class="mt-2 text-sm text-slate-500">Year 0 reflects project investment and later years reflect annual NOI.</p>
+                </div>
+                <div class="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">@CalculatorService.ProjectLifeYears year project life</div>
+            </div>
+            <div class="rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4">
+                <div class="h-96 min-w-0"><canvas id="cashflow-chart"></canvas></div>
+            </div>
+        </section>
+
+        @if (_recentRuns.Count > 0)
+        {
+            <section class="rounded-[28px] border border-white/10 bg-white p-6 shadow-xl md:p-8">
+                <h2 class="text-2xl font-semibold text-slate-900">Recent saved runs (SQL)</h2>
+                <p class="mt-1 text-sm text-slate-500">Persisted to the database — the last 5 saved calculations.</p>
+                <div class="mt-5 overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="text-slate-500">
+                            <tr class="border-b border-slate-200">
+                                <th class="py-2 pr-4">Saved</th>
+                                <th class="py-2 pr-4">Scenario</th>
+                                <th class="py-2 pr-4">Rate</th>
+                                <th class="py-2 pr-4">Location</th>
+                                <th class="py-2 pr-4">Revenue</th>
+                                <th class="py-2 pr-4">NPV</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-slate-800">
+                            @foreach (var run in _recentRuns)
+                            {
+                                <tr class="border-b border-slate-100">
+                                    <td class="py-2 pr-4">@run.CreatedAt.ToLocalTime().ToString("g")</td>
+                                    <td class="py-2 pr-4 capitalize">@run.Scenario</td>
+                                    <td class="py-2 pr-4">$@($"{run.ElectricityRate:F3}")</td>
+                                    <td class="py-2 pr-4">@(run.LocationName ?? "—")</td>
+                                    <td class="py-2 pr-4">$@($"{run.AnnualRevenue:N0}")</td>
+                                    <td class="py-2 pr-4">$@($"{run.Npv:N0}")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+    </div>
+</main>
+
+@code {
+    private string? _savedMessage;
+    private List<CalculatorRun> _recentRuns = new();
+
+    private CalculatorInputs Inputs => State.CalculatorInputs;
+    private double? MapRate => State.SelectedLocation?.ElectricityRate;
+
+    private CalculatorMetrics ManualMetrics => Calc.ManualMetrics(Inputs);
+    private CalculatorMetrics MapMetrics => Calc.MapMetrics(Inputs, MapRate);
+    private CalculatorMetrics Active => Inputs.RateMode == RateMode.Map ? MapMetrics : ManualMetrics;
+
+    private double ActiveElectricityRate => Inputs.RateMode == RateMode.Map
+        ? Calc.MapRateForScenario(Inputs, MapRate)
+        : Calc.ManualRateForScenario(Inputs);
+
+    private double RevenueDelta => MapMetrics.AnnualRevenue - ManualMetrics.AnnualRevenue;
+    private double NoiDelta => MapMetrics.NetOperatingIncome - ManualMetrics.NetOperatingIncome;
+    private double NpvDelta => MapMetrics.Npv - ManualMetrics.Npv;
+
+    private string ScenarioLabel => Inputs.Scenario == Scenario.Base ? "Base Case" : "Optimistic Case";
+
+    private string RateModeLabel => Inputs.RateMode switch
+    {
+        RateMode.Manual => "Manual",
+        RateMode.Map => "Map",
+        _ => "Compare",
+    };
+
+    private string RateModeValue => Inputs.RateMode switch
+    {
+        RateMode.Manual => "manual",
+        RateMode.Map => "map",
+        _ => "compare",
+    };
+
+    private string ActiveRateDescription => Inputs.RateMode switch
+    {
+        RateMode.Manual => "Using manually entered electricity rate",
+        RateMode.Map => $"Using {State.SelectedLocation?.Name ?? "selected map"} electricity rate",
+        _ => "Compare mode enabled — primary view currently shows manual rate",
+    };
+
+    protected override void OnInitialized()
+    {
+        State.OnChange += StateHasChanged;
+        UpdateSnapshot();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRecentRunsAsync();
+    }
+
+    private void OnScenarioChanged(ChangeEventArgs e)
+    {
+        Inputs.Scenario = (e.Value?.ToString() == "optimistic") ? Scenario.Optimistic : Scenario.Base;
+        UpdateSnapshot();
+    }
+
+    private void OnRateModeChanged(ChangeEventArgs e)
+    {
+        Inputs.RateMode = e.Value?.ToString() switch
+        {
+            "map" => RateMode.Map,
+            "compare" => RateMode.Compare,
+            _ => RateMode.Manual,
+        };
+
+        if (Inputs.RateMode == RateMode.Map && State.SelectedLocation is null)
+        {
+            Nav.NavigateTo("/map?message=select-location");
+            return;
+        }
+
+        UpdateSnapshot();
+    }
+
+    private void UpdateDouble(ChangeEventArgs e, Action<double> set)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var v))
+        {
+            set(v);
+            UpdateSnapshot();
+        }
+    }
+
+    private void UpdateSnapshot()
+    {
+        State.SetCalculatorSnapshot(new CalculatorSnapshot
+        {
+            Scenario = Inputs.Scenario,
+            RateMode = Inputs.RateMode,
+            ManualElectricityRate = Inputs.ElectricityRate,
+            ActiveElectricityRate = ActiveElectricityRate,
+            TotalProjectCost = Active.TotalProjectCost,
+            AnnualRevenue = Active.AnnualRevenue,
+            NetOperatingIncome = Active.NetOperatingIncome,
+            PaybackPeriod = Active.PaybackPeriod,
+            Npv = Active.Npv,
+        });
+    }
+
+    private async Task SaveRunAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        db.CalculatorRuns.Add(new CalculatorRun
+        {
+            Scenario = Inputs.Scenario.ToString().ToLowerInvariant(),
+            RateMode = Inputs.RateMode.ToString().ToLowerInvariant(),
+            SystemSizeKw = Inputs.SystemSizeKw,
+            CapacityFactor = Inputs.CapacityFactor,
+            InstallCostPerW = Inputs.InstallCostPerW,
+            ElectricityRate = ActiveElectricityRate,
+            AnnualOMCost = Inputs.AnnualOMCost,
+            TotalProjectCost = Active.TotalProjectCost,
+            AnnualRevenue = Active.AnnualRevenue,
+            NetOperatingIncome = Active.NetOperatingIncome,
+            PaybackPeriod = Active.PaybackPeriod,
+            Npv = Active.Npv,
+            LocationName = State.SelectedLocation?.Name,
+        });
+        await db.SaveChangesAsync();
+
+        _savedMessage = "Saved to database.";
+        await LoadRecentRunsAsync();
+    }
+
+    private async Task LoadRecentRunsAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _recentRuns = await db.CalculatorRuns
+            .OrderByDescending(r => r.Id)
+            .Take(5)
+            .ToListAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var cashFlow = Calc.BuildCashFlow(Active.TotalProjectCost, Active.NetOperatingIncome);
+        await JS.InvokeVoidAsync(
+            "renewableCharts.renderBar",
+            "cashflow-chart",
+            cashFlow.Select(p => p.Year).ToArray(),
+            cashFlow.Select(p => p.CashFlow).ToArray());
+    }
+
+    public void Dispose() => State.OnChange -= StateHasChanged;
+}
