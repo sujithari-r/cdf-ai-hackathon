@@ -1,0 +1,141 @@
+﻿@page "/"
+@implements IDisposable
+@inject MarketService MarketService
+@inject DashboardState DashboardState
+
+<PageTitle>Renewable Dashboard</PageTitle>
+
+<main class="page-surface">
+    <div class="container stack">
+        <section class="hero">
+            <div class="hero-grid">
+                <div>
+                    <span class="eyebrow">U.S. Renewable Energy Investment Analysis</span>
+                    <h1>Make smarter renewable energy investment decisions</h1>
+                    <p class="lead">
+                        Explore market signals, evaluate project economics, compare location-based pricing,
+                        and use AI to interpret dashboard context in one connected .NET workflow.
+                    </p>
+
+                    <div class="actions">
+                        <a class="button" href="calculator">Start with Calculator</a>
+                        <a class="button-secondary" href="map">View Map Insights</a>
+                        <a class="button-secondary" href="assistant">Open AI Assistant</a>
+                    </div>
+
+                    <div class="chips">
+                        <span class="chip">Market signals</span>
+                        <span class="chip">SQL-backed locations</span>
+                        <span class="chip">Financial modeling</span>
+                        <span class="chip">AI-backed interpretation</span>
+                    </div>
+                </div>
+
+                <div class="panel dark">
+                    <p class="muted">Dashboard Snapshot</p>
+                    <div class="grid grid-2">
+                        <div class="card dark">
+                            <span class="muted">Electricity Price</span>
+                            <h2>@FormatCurrency(MarketData?.ElectricityPrice)/kWh</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Capacity Growth</span>
+                            <h2>@FormatPercent(MarketData?.CapacityGrowth)</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Renewable Share</span>
+                            <h2>@FormatPercent(MarketData?.RenewableShare, 0)</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Project NPV</span>
+                            <h2>@FormatWholeCurrency(DashboardState.CalculatorSnapshot?.NetPresentValue)</h2>
+                        </div>
+                    </div>
+                    <div class="card dark" style="margin-top: 1rem;">
+                        <span class="muted">Selected Location</span>
+                        <h2>@(DashboardState.SelectedLocation?.Name ?? "No location selected")</h2>
+                        <p>
+                            @(DashboardState.SelectedLocation is null
+                                ? "Choose a state from the Map tab to connect market and project context."
+                                : $"Rate: {FormatCurrency(DashboardState.SelectedLocation.ElectricityRate)}/kWh")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-4">
+            <div class="metric">
+                <span>U.S. Electricity Price</span>
+                <strong>@FormatCurrency(MarketData?.ElectricityPrice)</strong>
+                <p class="muted">per kWh from EIA</p>
+            </div>
+            <div class="metric">
+                <span>Capacity Growth</span>
+                <strong>@FormatPercent(MarketData?.CapacityGrowth)</strong>
+                <p class="muted">market growth indicator</p>
+            </div>
+            <div class="metric">
+                <span>Selected Location</span>
+                <strong>@(DashboardState.SelectedLocation?.Name ?? "None")</strong>
+                <p class="muted">location context</p>
+            </div>
+            <div class="metric">
+                <span>Current Project NPV</span>
+                <strong>@FormatWholeCurrency(DashboardState.CalculatorSnapshot?.NetPresentValue)</strong>
+                <p class="muted">from calculator</p>
+            </div>
+        </section>
+
+        <section class="grid grid-2">
+            <div class="panel">
+                <p class="muted">Platform Overview</p>
+                <h2>One place for market, map, calculator, and AI workflows</h2>
+                <p class="muted">
+                    This converted Blazor app keeps the original dashboard flow while moving application logic
+                    into ASP.NET Core services and SQL-backed data access.
+                </p>
+            </div>
+
+            <div class="panel dark">
+                <p class="muted">AI Assistant</p>
+                <h2>Ask grounded investment questions</h2>
+                <p>
+                    Use the assistant to interpret selected locations, calculator outputs, and market signals
+                    with the current dashboard state.
+                </p>
+                <a class="button" href="assistant">Open AI Assistant</a>
+            </div>
+        </section>
+    </div>
+</main>
+
+@code {
+    private MarketData? MarketData { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        DashboardState.OnChange += StateHasChanged;
+        MarketData = await MarketService.GetMarketDataAsync();
+    }
+
+    public void Dispose()
+    {
+        DashboardState.OnChange -= StateHasChanged;
+    }
+
+    private static string FormatCurrency(decimal? value, int digits = 3)
+    {
+        return value is null ? "--" : value.Value.ToString($"C{digits}");
+    }
+
+    private static string FormatWholeCurrency(decimal? value)
+    {
+        return value is null ? "Not ready" : value.Value.ToString("C0");
+    }
+
+    private static string FormatPercent(decimal? value, int digits = 1)
+    {
+        return value is null ? "--" : $"{value.Value:F{digits}}%";
+    }
+}

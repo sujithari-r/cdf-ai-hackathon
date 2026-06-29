@@ -1,0 +1,201 @@
+@page "/market"
+@inject MarketService MarketService
+
+<PageTitle>Market Analysis</PageTitle>
+
+<main class="page-surface">
+    <div class="container stack">
+        <section class="hero">
+            <div class="hero-grid">
+                <div>
+                    <span class="eyebrow">Market Analysis</span>
+                    <h1>Renewable market trends</h1>
+                    <p class="lead">
+                        Explore electricity price movement, capacity growth, and renewable penetration
+                        through an ASP.NET Core service that fetches and caches EIA data.
+                    </p>
+                    <div class="chips">
+                        <span class="chip">Trend Range: @Range</span>
+                        <span class="chip">Latest: @(TrendSummary?.LatestMonth ?? "--")</span>
+                        <span class="chip">Direction: @(TrendSummary?.IsPositive == true ? "Uptrend" : TrendSummary is null ? "--" : "Downtrend")</span>
+                    </div>
+                </div>
+
+                <div class="panel dark">
+                    <p class="muted">Market Snapshot</p>
+                    <div class="actions">
+                        <button class="button-secondary" @onclick='() => SetRange("6M")'>6M</button>
+                        <button class="button-secondary" @onclick='() => SetRange("ALL")'>All</button>
+                    </div>
+                    <div class="grid grid-2" style="margin-top: 1rem;">
+                        <div class="card dark">
+                            <span class="muted">Current Price</span>
+                            <h2>@FormatCurrency(Data?.ElectricityPrice)/kWh</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Capacity Growth</span>
+                            <h2>@FormatPercent(Data?.CapacityGrowth)</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Renewable Share</span>
+                            <h2>@FormatPercent(Data?.RenewableShare, 0)</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Trend Change</span>
+                            <h2>@(TrendSummary is null ? "--" : $"{(TrendSummary.IsPositive ? "+" : "")}{TrendSummary.Percentage:F1}%")</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (Data is null)
+        {
+            <div class="panel dark">Loading market data...</div>
+        }
+        else
+        {
+            <section class="grid grid-3">
+                <div class="metric">
+                    <span>Electricity Price</span>
+                    <strong>@FormatCurrency(Data.ElectricityPrice)</strong>
+                    <p class="muted">per kWh</p>
+                </div>
+                <div class="metric">
+                    <span>Capacity Growth</span>
+                    <strong>@FormatPercent(Data.CapacityGrowth)</strong>
+                    <p class="muted">growth indicator</p>
+                </div>
+                <div class="metric">
+                    <span>Renewable Share</span>
+                    <strong>@FormatPercent(Data.RenewableShare, 0)</strong>
+                    <p class="muted">renewable penetration</p>
+                </div>
+            </section>
+
+            <section class="grid grid-2">
+                <div class="panel">
+                    <h2>Price Trend</h2>
+                    <p class="muted">National monthly electricity price trend from EIA.</p>
+                    <div class="simple-chart" aria-label="Electricity price trend">
+                        @foreach (var point in FilteredTrend)
+                        {
+                            <div class="bar" title="@($"{point.Month}: {FormatCurrency(point.Price)}")" style="height: @BarHeight(point.Price)%"></div>
+                        }
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2>Trend Summary</h2>
+                    @if (TrendSummary is null)
+                    {
+                        <p class="muted">No trend data is available. Configure EIA_API_KEY to enable live market data.</p>
+                    }
+                    else
+                    {
+                        <div class="table-like">
+                            <div class="row"><span>Average</span><strong>@FormatCurrency(TrendSummary.Average)</strong></div>
+                            <div class="row"><span>Absolute Change</span><strong>@TrendSummary.Change.ToString("+0.000;-0.000;0.000")</strong></div>
+                            <div class="row"><span>Minimum</span><strong>@FormatCurrency(TrendSummary.Min)</strong></div>
+                            <div class="row"><span>Maximum</span><strong>@FormatCurrency(TrendSummary.Max)</strong></div>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="grid grid-2">
+                <div class="panel">
+                    <p class="muted">Investor Read</p>
+                    <h2>What this means</h2>
+                    <p class="muted">
+                        Higher electricity prices can support stronger renewable project revenue assumptions,
+                        while capacity growth and renewable share provide useful direction on sector momentum.
+                    </p>
+                </div>
+                <div class="panel dark">
+                    <p class="muted">How to use this tab</p>
+                    <h2>Read the market before modeling</h2>
+                    <p>Use this tab to understand macro pricing direction first, then move to map context and project-specific returns.</p>
+                </div>
+            </section>
+        }
+    </div>
+</main>
+
+@code {
+    private MarketData? Data { get; set; }
+    private string Range { get; set; } = "ALL";
+
+    private IReadOnlyList<TrendPoint> FilteredTrend =>
+        Data?.Trend is null
+            ? Array.Empty<TrendPoint>()
+            : Range == "6M"
+                ? Data.Trend.TakeLast(6).ToList()
+                : Data.Trend;
+
+    private TrendSummary? TrendSummary
+    {
+        get
+        {
+            if (FilteredTrend.Count < 2)
+            {
+                return null;
+            }
+
+            var first = FilteredTrend[0].Price;
+            var last = FilteredTrend[^1].Price;
+            var change = last - first;
+            var percentage = first != 0m ? change / first * 100m : 0m;
+            var prices = FilteredTrend.Select(point => point.Price).ToList();
+
+            return new TrendSummary(
+                FilteredTrend[^1].Month,
+                change,
+                percentage,
+                change >= 0m,
+                prices.Average(),
+                prices.Min(),
+                prices.Max());
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Data = await MarketService.GetMarketDataAsync();
+    }
+
+    private void SetRange(string range)
+    {
+        Range = range;
+    }
+
+    private decimal BarHeight(decimal price)
+    {
+        if (FilteredTrend.Count == 0)
+        {
+            return 8;
+        }
+
+        var max = FilteredTrend.Max(point => point.Price);
+        return max <= 0 ? 8 : Math.Clamp(price / max * 100m, 8m, 100m);
+    }
+
+    private static string FormatCurrency(decimal? value, int digits = 3)
+    {
+        return value is null ? "--" : value.Value.ToString($"C{digits}");
+    }
+
+    private static string FormatPercent(decimal? value, int digits = 1)
+    {
+        return value is null ? "--" : $"{value.Value:F{digits}}%";
+    }
+
+    private sealed record TrendSummary(
+        string LatestMonth,
+        decimal Change,
+        decimal Percentage,
+        bool IsPositive,
+        decimal Average,
+        decimal Min,
+        decimal Max);
+}

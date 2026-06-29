@@ -1,0 +1,136 @@
+@page "/map"
+@inject LocationService LocationService
+@inject DashboardState DashboardState
+
+<PageTitle>Map Insights</PageTitle>
+
+<main class="page-surface">
+    <div class="container stack">
+        <section class="hero">
+            <div class="hero-grid">
+                <div>
+                    <span class="eyebrow">Geographic Insights</span>
+                    <h1>Renewable energy location intelligence</h1>
+                    <p class="lead">
+                        Compare SQL-backed state-level opportunity signals, select a location,
+                        and push map-based electricity pricing into your calculator workflow.
+                    </p>
+                    <div class="chips">
+                        <span class="chip">State-level pricing</span>
+                        <span class="chip">Solar score comparison</span>
+                        <span class="chip">Calculator-connected selection</span>
+                    </div>
+                </div>
+
+                <div class="panel dark">
+                    <p class="muted">Selected Location Snapshot</p>
+                    <div class="grid grid-2">
+                        <div class="card dark" style="grid-column: 1 / -1;">
+                            <span class="muted">Location</span>
+                            <h2>@(DashboardState.SelectedLocation?.Name ?? "No location selected")</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Electricity Rate</span>
+                            <h2>@(DashboardState.SelectedLocation is null ? "--" : $"{DashboardState.SelectedLocation.ElectricityRate:C2}/kWh")</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Solar Score</span>
+                            <h2>@(DashboardState.SelectedLocation is null ? "--" : $"{DashboardState.SelectedLocation.SolarScore:F1}/10")</h2>
+                        </div>
+                    </div>
+                    <div class="card dark" style="margin-top: 1rem;">
+                        <span class="muted">Location Note</span>
+                        <p>@(DashboardState.SelectedLocation?.Note ?? "Choose a state from the map or tracked locations panel.")</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (ShowSelectMessage)
+        {
+            <section class="alert">
+                <strong>Please select a location.</strong>
+                <div>Choose a state on the map to use map-based electricity pricing in the calculator.</div>
+            </section>
+        }
+
+        <section class="grid grid-2">
+            <div class="panel">
+                <h2>U.S. opportunity map</h2>
+                <p class="muted">Click a marker to update shared dashboard location context.</p>
+                <div class="map-stage">
+                    @foreach (var location in Locations)
+                    {
+                        <button class="map-marker"
+                                style="left: @MarkerLeft(location)%; top: @MarkerTop(location)%"
+                                title="@location.Note"
+                                @onclick="() => SelectLocation(location)">
+                            @location.Name
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="stack">
+                <section class="panel dark">
+                    <p class="muted">How to use this tab</p>
+                    <h2>Select a state to drive pricing assumptions</h2>
+                    <p>
+                        Clicking a marker updates the shared Blazor state. That selected rate can then
+                        be used inside the calculator or compared against manual assumptions.
+                    </p>
+                </section>
+
+                <section class="panel">
+                    <p class="muted">Tracked Locations</p>
+                    <div class="table-like">
+                        @foreach (var location in Locations)
+                        {
+                            var selected = DashboardState.SelectedLocation?.Id == location.Id;
+                            <button class="row" style="text-align: left;" @onclick="() => SelectLocation(location)">
+                                <span>
+                                    <strong>@location.Name</strong><br />
+                                    <span class="muted">Rate: @location.ElectricityRate.ToString("C2")/kWh</span><br />
+                                    <span class="muted">@location.Note</span>
+                                </span>
+                                <span class="pill">@(selected ? "Selected" : $"{location.SolarScore:F1}/10")</span>
+                            </button>
+                        }
+                    </div>
+                </section>
+            </div>
+        </section>
+    </div>
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "message")]
+    public string? Message { get; set; }
+
+    private List<Location> Locations { get; set; } = [];
+    private bool ShowSelectMessage => Message == "select-location";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Locations = await LocationService.GetLocationsAsync();
+    }
+
+    private void SelectLocation(Location location)
+    {
+        DashboardState.SetSelectedLocation(location);
+    }
+
+    private static double MarkerLeft(Location location)
+    {
+        const double minLongitude = -125;
+        const double maxLongitude = -66;
+        return Math.Clamp((location.Longitude - minLongitude) / (maxLongitude - minLongitude) * 100, 6, 94);
+    }
+
+    private static double MarkerTop(Location location)
+    {
+        const double minLatitude = 24;
+        const double maxLatitude = 49;
+        return Math.Clamp(100 - ((location.Latitude - minLatitude) / (maxLatitude - minLatitude) * 100), 8, 92);
+    }
+}

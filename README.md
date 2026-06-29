@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Renewable Dashboard
+
+Renewable Dashboard is an ASP.NET Core Blazor Web App with SQL-backed data access. It ports the original renewable investment dashboard from Next.js/React into a .NET application with:
+
+- Blazor pages for Home, Market, Map, Calculator, and AI Assistant
+- ASP.NET Core services for EIA market data, OpenAI assistant responses, and calculator metrics
+- SQLite persistence via Entity Framework Core for tracked renewable locations and cached market snapshots
+- Minimal API endpoints compatible with the previous `/api/market` and `/api/assistant` backend surface
+
+## Requirements
+
+- .NET SDK 8.0+
+- Optional: `EIA_API_KEY` for live EIA market data
+- Optional: `OPENAI_API_KEY` for assistant responses
 
 ## Getting Started
 
-First, run the development server:
+Restore and run the Blazor application:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+dotnet restore
+dotnet run
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open the URL printed by `dotnet run` in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The app creates `renewable-dashboard.db` automatically on startup and seeds the tracked locations:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Texas
+- California
+- Arizona
 
-## Learn More
+## Configuration
 
-To learn more about Next.js, take a look at the following resources:
+Configuration can come from `appsettings.json`, environment variables, user secrets, or your hosting platform:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+export ConnectionStrings__DefaultConnection="Data Source=renewable-dashboard.db"
+export EIA_API_KEY="your-eia-key"
+export OPENAI_API_KEY="your-openai-key"
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+- `Components/Pages/` - Blazor route components
+- `Components/Layout/` - application shell and navigation
+- `Data/DashboardDbContext.cs` - EF Core SQL context and seed data
+- `Models/` - location, market, calculator, and assistant models
+- `Services/` - app state, calculator logic, EIA market integration, OpenAI integration, and SQL location lookup
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## API Endpoints
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `GET /api/market` returns current price, growth, renewable share, and trend data
+- `POST /api/assistant` accepts a dashboard-grounded question and returns an assistant answer

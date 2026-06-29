@@ -1,0 +1,206 @@
+@page "/assistant"
+@inject AssistantService AssistantService
+@inject DashboardState DashboardState
+
+<PageTitle>AI Research Assistant</PageTitle>
+
+<main class="page-surface">
+    <div class="container stack">
+        <section class="hero">
+            <div class="hero-grid">
+                <div>
+                    <span class="eyebrow">AI Research Assistant</span>
+                    <h1>Ask grounded investment questions</h1>
+                    <p class="lead">
+                        Ask about renewable energy markets, project economics, selected locations,
+                        and regional tradeoffs using the current Blazor dashboard context.
+                    </p>
+                </div>
+
+                <div class="panel dark">
+                    <p class="muted">Current Context</p>
+                    <div class="grid grid-2">
+                        <div class="card dark">
+                            <span class="muted">Location</span>
+                            <h2>@(DashboardState.SelectedLocation?.Name ?? "None")</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Rate</span>
+                            <h2>@(DashboardState.SelectedLocation is null ? "--" : $"{DashboardState.SelectedLocation.ElectricityRate:C2}/kWh")</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">Scenario</span>
+                            <h2>@(DashboardState.CalculatorSnapshot?.Scenario ?? "Not available")</h2>
+                        </div>
+                        <div class="card dark">
+                            <span class="muted">NPV</span>
+                            <h2>@(DashboardState.CalculatorSnapshot is null ? "--" : DashboardState.CalculatorSnapshot.NetPresentValue.ToString("C0"))</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-2">
+            <div class="panel">
+                <h2>Conversation</h2>
+                <div class="chat-window">
+                    @foreach (var message in Messages)
+                    {
+                        <div class="message @message.Role">
+                            <strong>@(message.Role == "user" ? "You" : "Assistant")</strong>
+                            <div style="white-space: pre-wrap;">@message.Content</div>
+                            @if (message.Suggestions?.Count > 0)
+                            {
+                                <div class="actions">
+                                    @foreach (var suggestion in message.Suggestions)
+                                    {
+                                        <button class="button-secondary" @onclick="() => SendMessage(suggestion)">@suggestion</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (Loading)
+                    {
+                        <div class="message assistant">
+                            <strong>Assistant</strong>
+                            <div>Thinking...</div>
+                        </div>
+                    }
+                </div>
+
+                <div class="field" style="margin-top: 1rem;">
+                    <label>Your question</label>
+                    <textarea rows="4"
+                              @bind="Input"
+                              placeholder="Ask about market trends, project returns, or selected locations..."></textarea>
+                </div>
+                <div class="actions">
+                    <button class="button" disabled="@Loading" @onclick="() => SendMessage()">@(Loading ? "Sending..." : "Send")</button>
+                </div>
+            </div>
+
+            <div class="stack">
+                <section class="panel dark">
+                    <p class="muted">Quick Prompts</p>
+                    <h2>Start from dashboard context</h2>
+                    <div class="actions">
+                        @foreach (var prompt in QuickPrompts)
+                        {
+                            <button class="button-secondary" @onclick="() => SendMessage(prompt)">@prompt</button>
+                        }
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <p class="muted">Sources sent to assistant</p>
+                    <div class="table-like">
+                        <div class="row"><span>Selected Location</span><strong>@(DashboardState.SelectedLocation?.Name ?? "None")</strong></div>
+                        <div class="row"><span>Solar Score</span><strong>@(DashboardState.SelectedLocation is null ? "--" : $"{DashboardState.SelectedLocation.SolarScore:F1}/10")</strong></div>
+                        <div class="row"><span>Annual Revenue</span><strong>@(DashboardState.CalculatorSnapshot is null ? "--" : DashboardState.CalculatorSnapshot.AnnualRevenue.ToString("C0"))</strong></div>
+                        <div class="row"><span>NOI</span><strong>@(DashboardState.CalculatorSnapshot is null ? "--" : DashboardState.CalculatorSnapshot.NetOperatingIncome.ToString("C0"))</strong></div>
+                        <div class="row"><span>Payback</span><strong>@PaybackLabel</strong></div>
+                    </div>
+                </section>
+            </div>
+        </section>
+    </div>
+</main>
+
+@code {
+    private string Input { get; set; } = string.Empty;
+    private bool Loading { get; set; }
+
+    private List<ChatMessage> Messages { get; } =
+    [
+        new ChatMessage(
+            "assistant",
+            "Hello. I am your renewable energy AI analyst. I can help evaluate market signals, project economics, selected locations, and investment tradeoffs using the current dashboard context.",
+            [
+                "Analyze the current project economics.",
+                "Is the selected location a good investment opportunity?",
+                "Explain the current NPV and payback in simple terms."
+            ])
+    ];
+
+    private IReadOnlyList<string> QuickPrompts { get; } =
+    [
+        "Analyze the current project economics.",
+        "Is the selected location a good investment opportunity?",
+        "Explain the current NPV and payback in simple terms.",
+        "Compare market signals with this calculator scenario."
+    ];
+
+    private string PaybackLabel => DashboardState.CalculatorSnapshot?.PaybackPeriod is double payback
+        ? $"{payback:F1} years"
+        : "Not available";
+
+    private async Task SendMessage(string? messageText = null)
+    {
+        if (Loading)
+        {
+            return;
+        }
+
+        var finalMessage = (messageText ?? Input).Trim();
+        if (string.IsNullOrWhiteSpace(finalMessage))
+        {
+            return;
+        }
+
+        Messages.Add(new ChatMessage("user", finalMessage));
+        Input = string.Empty;
+        Loading = true;
+
+        var response = await AssistantService.AskAsync(new AssistantRequest(
+            finalMessage,
+            new AssistantContext(DashboardState.SelectedLocation, DashboardState.CalculatorSnapshot)));
+
+        Messages.Add(new ChatMessage("assistant", response.Answer, BuildFollowUpSuggestions(response.Answer)));
+        Loading = false;
+    }
+
+    private static IReadOnlyList<string> BuildFollowUpSuggestions(string answer)
+    {
+        var lower = answer.ToLowerInvariant();
+
+        if (lower.Contains("npv") || lower.Contains("payback") || lower.Contains("revenue") || lower.Contains("noi"))
+        {
+            return
+            [
+                "Explain which input has the biggest impact on returns.",
+                "How can I improve this project's NPV?",
+                "Compare this with a more optimistic scenario."
+            ];
+        }
+
+        if (lower.Contains("location") || lower.Contains("state") || lower.Contains("solar") || lower.Contains("electricity rate"))
+        {
+            return
+            [
+                "Compare this location with another state.",
+                "Is this location better for revenue or long-term growth?",
+                "How does the electricity rate affect project returns here?"
+            ];
+        }
+
+        if (lower.Contains("market") || lower.Contains("trend") || lower.Contains("renewable share") || lower.Contains("capacity growth"))
+        {
+            return
+            [
+                "How should I use these market signals in the calculator?",
+                "What is the main investment risk from this market view?",
+                "Summarize this market outlook in simple terms."
+            ];
+        }
+
+        return
+        [
+            "Summarize that in simple terms.",
+            "What should I look at next in the dashboard?",
+            "Give me the key investment takeaway."
+        ];
+    }
+}
