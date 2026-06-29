@@ -1,0 +1,40 @@
+.top-nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #dfe6ef;
+    background: #0f172a;
+}
+
+.brand {
+    color: #f8fafc;
+    font-weight: 700;
+}
+
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.links ::deep .nav-link {
+    color: #cbd5e1;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 0.45rem 0.8rem;
+}
+
+.links ::deep .nav-link.active {
+    color: #0f172a;
+    background: #f8fafc;
+}
+
+.links ::deep .nav-link:hover {
+    color: #ffffff;
+}

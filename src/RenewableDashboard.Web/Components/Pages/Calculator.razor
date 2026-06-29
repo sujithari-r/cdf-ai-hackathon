@@ -1,0 +1,133 @@
+@page "/calculator"
+@inject CalculatorService CalculatorService
+@inject DashboardStateService DashboardState
+@inject AppDbContext DbContext
+
+<PageTitle>Calculator</PageTitle>
+
+<h1>Project Economics Calculator</h1>
+<p class="subtitle">Run base and optimistic scenarios using manual or map pricing.</p>
+
+<div class="grid-2">
+    <section class="card">
+        <h2>Inputs</h2>
+
+        <div class="form-grid">
+            <label>
+                Scenario
+                <select @bind="_input.Scenario">
+                    <option value="base">Base</option>
+                    <option value="optimistic">Optimistic</option>
+                </select>
+            </label>
+
+            <label>
+                Rate Mode
+                <select @bind="_input.RateMode">
+                    <option value="manual">Manual</option>
+                    <option value="map">Map</option>
+                </select>
+            </label>
+
+            <label>
+                System Size (kW)
+                <input type="number" step="1" @bind="_input.SystemSizeKw" />
+            </label>
+
+            <label>
+                Capacity Factor (%)
+                <input type="number" step="0.1" @bind="_input.CapacityFactorPercent" />
+            </label>
+
+            <label>
+                Install Cost ($/W)
+                <input type="number" step="0.01" @bind="_input.InstallCostPerWatt" />
+            </label>
+
+            <label>
+                Manual Electricity Rate ($/kWh)
+                <input type="number" step="0.001" @bind="_input.ElectricityRate" />
+            </label>
+
+            <label>
+                Annual O&M Cost ($)
+                <input type="number" step="1" @bind="_input.AnnualOmCost" />
+            </label>
+        </div>
+
+        <button class="btn-primary mt-2" @onclick="RunCalculation">Run Calculation</button>
+    </section>
+
+    <section class="card">
+        <h2>Results</h2>
+        @if (_result is null)
+        {
+            <p>Run a calculation to see outputs.</p>
+        }
+        else
+        {
+            <ul>
+                <li>Active Rate: $@_result.ActiveElectricityRate.ToString("0.000")/kWh</li>
+                <li>Total Project Cost: $@_result.TotalProjectCost.ToString("N0")</li>
+                <li>Annual Energy: @_result.AnnualEnergyProduction.ToString("N0") kWh</li>
+                <li>Annual Revenue: $@_result.AnnualRevenue.ToString("N0")</li>
+                <li>NOI: $@_result.NetOperatingIncome.ToString("N0")</li>
+                <li>Payback: @(_result.PaybackPeriodYears.HasValue ? $"{_result.PaybackPeriodYears.Value:F1} years" : "Not achievable")</li>
+                <li>NPV: $@_result.Npv.ToString("N0")</li>
+            </ul>
+        }
+    </section>
+</div>
+
+@if (_result is not null)
+{
+    <section class="card mt-3">
+        <h2>Cash Flow (20 years)</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Year</th>
+                    <th>Cash Flow ($)</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var point in _result.CashFlow)
+                {
+                    <tr>
+                        <td>@point.Year</td>
+                        <td>@point.Value.ToString("N0")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    private CalculatorInput _input = new();
+    private CalculatorResult? _result;
+
+    private async Task RunCalculation()
+    {
+        var mapRate = DashboardState.SelectedLocation?.ElectricityRate;
+        _result = CalculatorService.Calculate(_input, mapRate);
+
+        var snapshot = new CalculationSnapshot
+        {
+            Scenario = _input.Scenario,
+            RateMode = _input.RateMode,
+            ManualElectricityRate = _input.ElectricityRate,
+            ActiveElectricityRate = _result.ActiveElectricityRate,
+            TotalProjectCost = _result.TotalProjectCost,
+            AnnualRevenue = _result.AnnualRevenue,
+            NetOperatingIncome = _result.NetOperatingIncome,
+            PaybackPeriodYears = _result.PaybackPeriodYears,
+            Npv = _result.Npv
+        };
+
+        DbContext.CalculationSnapshots.Add(snapshot);
+        await DbContext.SaveChangesAsync();
+
+        DashboardState.SetCalculatorSnapshot(snapshot);
+    }
+}

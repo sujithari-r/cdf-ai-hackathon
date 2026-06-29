@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# .NET
+**/bin/
+**/obj/
+*.user
+*.db
+.vs/
+
+# local SDK/tools (cloud agent bootstrap)
+.dotnet/
+.dotnet-tools/

@@ -1,0 +1,73 @@
+@page "/market"
+@inject MarketService MarketService
+
+<PageTitle>Market</PageTitle>
+
+<h1>Market Analysis</h1>
+<p class="subtitle">Live EIA electricity data with trend snapshots.</p>
+
+<div class="toolbar">
+    <label>Range:</label>
+    <select @bind="_range">
+        <option value="ALL">All</option>
+        <option value="6M">6M</option>
+    </select>
+</div>
+
+@if (_loading)
+{
+    <p>Loading market data...</p>
+}
+else
+{
+    <div class="grid-3">
+        <article class="card">
+            <h3>Current Price</h3>
+            <p class="metric">$@_snapshot.ElectricityPrice.ToString("0.000")/kWh</p>
+        </article>
+        <article class="card">
+            <h3>Capacity Growth</h3>
+            <p class="metric">@_snapshot.CapacityGrowth.ToString("0.0")%</p>
+        </article>
+        <article class="card">
+            <h3>Renewable Share</h3>
+            <p class="metric">@_snapshot.RenewableShare.ToString("0")%</p>
+        </article>
+    </div>
+
+    <section class="card mt-3">
+        <h2>Price Trend</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th>Price ($/kWh)</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var point in FilteredTrend)
+                {
+                    <tr>
+                        <td>@point.Month</td>
+                        <td>@point.Price.ToString("0.000")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    private MarketSnapshot _snapshot = new();
+    private bool _loading = true;
+    private string _range = "ALL";
+
+    private IEnumerable<MarketTrendPoint> FilteredTrend =>
+        _range == "6M" ? _snapshot.Trend.TakeLast(6) : _snapshot.Trend;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _snapshot = await MarketService.GetLatestMarketSnapshotAsync();
+        _loading = false;
+    }
+}

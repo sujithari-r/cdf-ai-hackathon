@@ -1,0 +1,44 @@
+@page "/map"
+@inject AppDbContext DbContext
+@inject DashboardStateService DashboardState
+
+<PageTitle>Map</PageTitle>
+
+<h1>Location Insights</h1>
+<p class="subtitle">Select a location to drive calculator assumptions.</p>
+
+@if (_loading)
+{
+    <p>Loading locations...</p>
+}
+else
+{
+    <div class="grid-3">
+        @foreach (var location in _locations)
+        {
+            var isSelected = DashboardState.SelectedLocation?.Id == location.Id;
+            <button class="card selectable @(isSelected ? "selected" : string.Empty)" @onclick="() => SelectLocation(location)">
+                <h3>@location.Name</h3>
+                <p>Rate: $@location.ElectricityRate/kWh</p>
+                <p>Solar Score: @location.SolarScore/10</p>
+                <p class="muted">@location.Note</p>
+            </button>
+        }
+    </div>
+}
+
+@code {
+    private List<LocationInsight> _locations = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _locations = await DbContext.LocationInsights.OrderBy(x => x.Name).ToListAsync();
+        _loading = false;
+    }
+
+    private void SelectLocation(LocationInsight location)
+    {
+        DashboardState.SetSelectedLocation(location);
+    }
+}

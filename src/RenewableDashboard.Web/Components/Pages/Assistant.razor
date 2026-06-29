@@ -1,0 +1,75 @@
+@page "/assistant"
+@inject AssistantService AssistantService
+@inject DashboardStateService DashboardState
+
+<PageTitle>Assistant</PageTitle>
+
+<h1>AI Research Assistant</h1>
+<p class="subtitle">Ask questions grounded in your selected location and calculator snapshot.</p>
+
+<div class="card">
+    <div class="chat-window">
+        @foreach (var message in _messages)
+        {
+            <div class="chat-message @(message.Role == "user" ? "user" : "assistant")">
+                <strong>@(message.Role == "user" ? "You" : "Assistant")</strong>
+                <p>@message.Content</p>
+            </div>
+        }
+
+        @if (_loading)
+        {
+            <div class="chat-message assistant">
+                <strong>Assistant</strong>
+                <p>Analyzing...</p>
+            </div>
+        }
+    </div>
+
+    <div class="chat-controls">
+        <textarea rows="3" @bind="_input" placeholder="Ask about market trends, NPV, payback, or location tradeoffs..."></textarea>
+        <button class="btn-primary" disabled="_loading || string.IsNullOrWhiteSpace(_input)" @onclick="SendAsync">
+            Send
+        </button>
+    </div>
+</div>
+
+@code {
+    private readonly List<AssistantChatMessage> _messages =
+    [
+        new()
+        {
+            Role = "assistant",
+            Content = "Hello. I can help analyze market signals, project economics, and location-based tradeoffs."
+        }
+    ];
+
+    private string _input = string.Empty;
+    private bool _loading;
+
+    private async Task SendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_input) || _loading)
+        {
+            return;
+        }
+
+        var userQuestion = _input.Trim();
+        _messages.Add(new AssistantChatMessage { Role = "user", Content = userQuestion });
+        _input = string.Empty;
+        _loading = true;
+
+        var answer = await AssistantService.AskAsync(
+            userQuestion,
+            DashboardState.SelectedLocation,
+            DashboardState.CalculatorSnapshot);
+
+        _messages.Add(new AssistantChatMessage
+        {
+            Role = "assistant",
+            Content = answer
+        });
+
+        _loading = false;
+    }
+}

@@ -1,0 +1,72 @@
+﻿@page "/"
+@implements IDisposable
+@inject MarketService MarketService
+@inject DashboardStateService DashboardState
+
+<PageTitle>Renewable Dashboard</PageTitle>
+
+<h1>Renewable Energy Investment Dashboard</h1>
+<p class="subtitle">Market, location, calculator, and AI workflows are now running on .NET + Blazor + SQL.</p>
+
+@if (_loading)
+{
+    <p>Loading market snapshot...</p>
+}
+else
+{
+    <div class="grid-4">
+        <article class="card">
+            <h3>Electricity Price</h3>
+            <p class="metric">$@_market.ElectricityPrice.ToString("0.000")/kWh</p>
+        </article>
+        <article class="card">
+            <h3>Capacity Growth</h3>
+            <p class="metric">@_market.CapacityGrowth.ToString("0.0")%</p>
+        </article>
+        <article class="card">
+            <h3>Renewable Share</h3>
+            <p class="metric">@_market.RenewableShare.ToString("0")%</p>
+        </article>
+        <article class="card">
+            <h3>Selected Location</h3>
+            <p class="metric">@(DashboardState.SelectedLocation?.Name ?? "None")</p>
+        </article>
+    </div>
+
+    <section class="card mt-3">
+        <h2>Latest Calculator Snapshot</h2>
+        @if (DashboardState.CalculatorSnapshot is null)
+        {
+            <p>No calculator run yet. Go to the Calculator page to generate one.</p>
+        }
+        else
+        {
+            <ul>
+                <li>Scenario: @DashboardState.CalculatorSnapshot.Scenario</li>
+                <li>Rate Mode: @DashboardState.CalculatorSnapshot.RateMode</li>
+                <li>Annual Revenue: $@DashboardState.CalculatorSnapshot.AnnualRevenue.ToString("N0")</li>
+                <li>NOI: $@DashboardState.CalculatorSnapshot.NetOperatingIncome.ToString("N0")</li>
+                <li>NPV: $@DashboardState.CalculatorSnapshot.Npv.ToString("N0")</li>
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    private MarketSnapshot _market = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        DashboardState.StateChanged += OnStateChanged;
+        _market = await MarketService.GetLatestMarketSnapshotAsync();
+        _loading = false;
+    }
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        DashboardState.StateChanged -= OnStateChanged;
+    }
+}
