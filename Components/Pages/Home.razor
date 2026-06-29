@@ -136,6 +136,6 @@
 
     private static string FormatPercent(decimal? value, int digits = 1)
     {
-        return value is null ? "--" : $"{value.Value:F{digits}}%";
+        return value is null ? "--" : $"{value.Value.ToString($"F{digits}")}%";
     }
 }

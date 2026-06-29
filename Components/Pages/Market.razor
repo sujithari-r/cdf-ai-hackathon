@@ -133,7 +133,7 @@
                 ? Data.Trend.TakeLast(6).ToList()
                 : Data.Trend;
 
-    private TrendSummary? TrendSummary
+    private TrendStats? TrendSummary
     {
         get
         {
@@ -148,7 +148,7 @@
             var percentage = first != 0m ? change / first * 100m : 0m;
             var prices = FilteredTrend.Select(point => point.Price).ToList();
 
-            return new TrendSummary(
+            return new TrendStats(
                 FilteredTrend[^1].Month,
                 change,
                 percentage,
@@ -187,10 +187,10 @@
 
     private static string FormatPercent(decimal? value, int digits = 1)
     {
-        return value is null ? "--" : $"{value.Value:F{digits}}%";
+        return value is null ? "--" : $"{value.Value.ToString($"F{digits}")}%";
     }
 
-    private sealed record TrendSummary(
+    private sealed record TrendStats(
         string LatestMonth,
         decimal Change,
         decimal Percentage,
