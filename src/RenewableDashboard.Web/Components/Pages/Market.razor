@@ -1,0 +1,253 @@
+@page "/market"
+@using RenewableDashboard.Core.DTOs
+@using RenewableDashboard.Core.Interfaces
+@using RenewableDashboard.Web.Services
+@inject IMarketService MarketService
+@inject ChartJsInterop ChartJs
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+<PageTitle>Market - Renewable Dashboard</PageTitle>
+
+<div class="dashboard-page">
+    <div class="dashboard-container">
+        <section class="hero-section blue">
+            <div class="hero-grid cols-2">
+                <div>
+                    <div class="badge blue">Market Analysis</div>
+                    <h1 class="hero-title" style="font-size: clamp(2rem, 4vw, 3rem);">Renewable market trends</h1>
+                    <p class="hero-text">
+                        Explore electricity price movement, capacity growth, and
+                        renewable penetration through a cleaner analytics-focused market view.
+                    </p>
+
+                    <div class="stat-grid cols-2" style="margin-top: 2rem;">
+                        <div class="stat-card">
+                            <p class="stat-label">Trend Range</p>
+                            <p class="stat-value">@_range</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Latest Month</p>
+                            <p class="stat-value">@(_trendSummary?.LatestMonth ?? "--")</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Direction</p>
+                            <p class="stat-value">@(_trendSummary is null ? "--" : _trendSummary.IsPositive ? "Uptrend" : "Downtrend")</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <p class="panel-label">Market Snapshot</p>
+                        <div class="range-toggle">
+                            <button class="range-btn @(_range == "6M" ? "active" : "")" @onclick='() => SetRange("6M")'>6M</button>
+                            <button class="range-btn @(_range == "ALL" ? "active" : "")" @onclick='() => SetRange("ALL")'>All</button>
+                        </div>
+                    </div>
+
+                    <div class="stat-grid cols-2">
+                        <div class="stat-card">
+                            <p class="stat-label">Current Price</p>
+                            <p class="stat-value">@(_data is not null ? $"${_data.ElectricityPrice:F3}/kWh" : "--")</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Capacity Growth</p>
+                            <p class="stat-value emerald">@(_data is not null ? $"{_data.CapacityGrowth:F1}%" : "--")</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Renewable Share</p>
+                            <p class="stat-value blue">@(_data is not null ? $"{_data.RenewableShare:F0}%" : "--")</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Trend Change</p>
+                            <p class="stat-value @(_trendSummary?.IsPositive == true ? "emerald" : "negative")">
+                                @(_trendSummary is not null ? $"{(_trendSummary.IsPositive ? "+" : "")}{_trendSummary.Percentage:F1}%" : "--")
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (_data is null)
+        {
+            <section class="kpi-grid cols-3">
+                @for (var i = 0; i < 3; i++) { <div class="skeleton-card"></div> }
+            </section>
+        }
+        else
+        {
+            <section class="kpi-grid cols-3">
+                <div class="kpi-card emerald">
+                    <p class="kpi-title">Electricity Price</p>
+                    <p class="kpi-value">${_data.ElectricityPrice:F3}</p>
+                    <p class="kpi-subtitle">per kWh</p>
+                </div>
+                <div class="kpi-card blue">
+                    <p class="kpi-title">Capacity Growth</p>
+                    <p class="kpi-value">@_data.CapacityGrowth.ToString("F1")%</p>
+                    <p class="kpi-subtitle">Growth indicator</p>
+                </div>
+                <div class="kpi-card violet">
+                    <p class="kpi-title">Renewable Share</p>
+                    <p class="kpi-value">@_data.RenewableShare.ToString("F0")%</p>
+                    <p class="kpi-subtitle">Renewable penetration</p>
+                </div>
+            </section>
+
+            @if (_trendSummary is not null)
+            {
+                <section class="content-grid cols-2-alt">
+                    <div class="white-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <div>
+                                <h2 class="section-title">Price Trend</h2>
+                                <p class="section-subtitle">National monthly electricity price trend</p>
+                            </div>
+                            <span class="kpi-tag blue">Source: EIA Open Data API</span>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-canvas-wrap">
+                                <canvas id="market-line-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div class="white-card">
+                            <h2 class="section-title" style="font-size: 1.5rem;">Trend Summary</h2>
+                            <div class="output-grid" style="margin-top: 1.25rem;">
+                                <div class="output-card">
+                                    <p class="kpi-title">Average</p>
+                                    <p class="kpi-value" style="font-size: 1.5rem;">${_trendSummary.Average:F3}</p>
+                                </div>
+                                <div class="output-card">
+                                    <p class="kpi-title">Absolute Change</p>
+                                    <p class="kpi-value @(_trendSummary.IsPositive ? "positive" : "negative")" style="font-size: 1.5rem;">
+                                        @(_trendSummary.IsPositive ? "+" : "")@_trendSummary.Change.ToString("F3")
+                                    </p>
+                                </div>
+                                <div class="output-card">
+                                    <p class="kpi-title">Minimum</p>
+                                    <p class="kpi-value" style="font-size: 1.5rem;">${_trendSummary.Min:F3}</p>
+                                </div>
+                                <div class="output-card">
+                                    <p class="kpi-title">Maximum</p>
+                                    <p class="kpi-value" style="font-size: 1.5rem;">${_trendSummary.Max:F3}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dark-card blue">
+                            <p style="color: var(--blue-200); font-size: 0.875rem;">Key Takeaways</p>
+                            <h2 class="section-title" style="color: white; font-size: 1.5rem;">What stands out in this market view</h2>
+                            <div style="margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                                <div class="step-box">
+                                    <p class="step-title">Price direction</p>
+                                    <p class="step-text">The selected range is showing a @(_trendSummary.IsPositive ? "positive" : "negative") trend in electricity pricing.</p>
+                                </div>
+                                <div class="step-box">
+                                    <p class="step-title">Revenue implication</p>
+                                    <p class="step-text">Higher electricity prices can improve renewable project revenue assumptions.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private MarketDataDto? _data;
+    private string _range = "ALL";
+    private TrendSummary? _trendSummary;
+
+    private sealed class TrendSummary
+    {
+        public decimal First { get; init; }
+        public decimal Last { get; init; }
+        public decimal Change { get; init; }
+        public decimal Percentage { get; init; }
+        public bool IsPositive { get; init; }
+        public string LatestMonth { get; init; } = string.Empty;
+        public decimal Average { get; init; }
+        public decimal Min { get; init; }
+        public decimal Max { get; init; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _data = await MarketService.GetMarketDataAsync();
+        UpdateTrendSummary();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_data is not null && FilteredTrend.Count > 0)
+        {
+            await RenderChartAsync();
+        }
+    }
+
+    private List<TrendPointDto> FilteredTrend
+    {
+        get
+        {
+            if (_data?.Trend is null) return [];
+            return _range == "6M" ? _data.Trend.TakeLast(6).ToList() : _data.Trend;
+        }
+    }
+
+    private void SetRange(string range)
+    {
+        _range = range;
+        UpdateTrendSummary();
+        _ = RenderChartAsync();
+    }
+
+    private void UpdateTrendSummary()
+    {
+        var trend = FilteredTrend;
+        if (trend.Count < 2)
+        {
+            _trendSummary = null;
+            return;
+        }
+
+        var first = trend[0].Price;
+        var last = trend[^1].Price;
+        var change = last - first;
+        var percentage = first != 0 ? (change / first) * 100 : 0;
+
+        _trendSummary = new TrendSummary
+        {
+            First = first,
+            Last = last,
+            Change = change,
+            Percentage = percentage,
+            IsPositive = change >= 0,
+            LatestMonth = trend[^1].Month,
+            Average = trend.Average(t => t.Price),
+            Min = trend.Min(t => t.Price),
+            Max = trend.Max(t => t.Price)
+        };
+    }
+
+    private async Task RenderChartAsync()
+    {
+        var trend = FilteredTrend;
+        if (trend.Count == 0) return;
+
+        await ChartJs.DestroyChartAsync("market-line-chart");
+        await ChartJs.CreateLineChartAsync(
+            "market-line-chart",
+            trend.Select(t => t.Month).ToArray(),
+            trend.Select(t => t.Price).ToArray(),
+            "Electricity Price");
+    }
+
+    public async ValueTask DisposeAsync() => await ChartJs.DisposeAsync();
+}

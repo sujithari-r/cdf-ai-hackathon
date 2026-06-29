@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Renewable Dashboard (.NET + Blazor + SQL)
+
+A U.S. renewable energy investment analysis dashboard migrated from Next.js to **ASP.NET Core 8**, **Blazor Server**, and **SQL Server** (with SQLite for local development).
+
+## Features
+
+- **Home** — Live dashboard snapshot with market KPIs, selected location, and project NPV
+- **Market** — EIA electricity price trends with interactive Chart.js line chart
+- **Calculator** — Renewable project economics (NPV, NOI, payback, cash flow)
+- **Map** — Leaflet map with SQL-backed state location data
+- **AI Assistant** — OpenAI-powered investment analyst grounded in dashboard context
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | Blazor Server (interactive components) |
+| Backend | ASP.NET Core 8 Web API |
+| Database | SQL Server (production) / SQLite (development) |
+| ORM | Entity Framework Core 8 |
+| Charts | Chart.js |
+| Map | Leaflet (JS interop) |
+| AI | OpenAI GPT-4o-mini |
+
+## Project Structure
+
+```
+src/
+├── RenewableDashboard.Core/           # Models, DTOs, calculator logic
+├── RenewableDashboard.Infrastructure/ # EF Core, EIA & OpenAI services
+└── RenewableDashboard.Web/            # Blazor UI, API controllers, state services
+database/
+└── Schema.sql                         # SQL Server schema and seed data
+```
+
+## Prerequisites
+
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- SQL Server (production) — or use the built-in SQLite dev database
+- API keys (optional):
+  - `EIA_API_KEY` — [EIA Open Data API](https://www.eia.gov/opendata/)
+  - `OPENAI_API_KEY` — [OpenAI API](https://platform.openai.com/)
 
 ## Getting Started
 
-First, run the development server:
+### 1. Configure API keys
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Edit `src/RenewableDashboard.Web/appsettings.Development.json`:
+
+```json
+{
+  "EIA_API_KEY": "your-eia-key",
+  "OPENAI_API_KEY": "your-openai-key"
+}
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Database
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Development (default):** SQLite database is created automatically at `renewable.db`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Production (SQL Server):**
 
-## Learn More
+1. Run `database/Schema.sql` against your SQL Server instance
+2. Update `appsettings.json`:
 
-To learn more about Next.js, take a look at the following resources:
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost;Database=RenewableDashboard;Trusted_Connection=True;TrustServerCertificate=True;"
+  }
+}
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Run the application
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+cd src/RenewableDashboard.Web
+dotnet run
+```
 
-## Deploy on Vercel
+Open [http://localhost:5000](http://localhost:5000) (or the URL shown in the terminal).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## API Endpoints
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/market` | National electricity market data (EIA proxy) |
+| POST | `/api/assistant` | AI assistant with dashboard context |
+
+## Migration Notes
+
+This application was converted from a Next.js/React dashboard. Key changes:
+
+- React Context → Blazor scoped state services (`LocationStateService`, `CalculatorStateService`)
+- Next.js API routes → ASP.NET Core controllers
+- Static `locationData.ts` → SQL `Locations` table with EF Core seeding
+- Recharts → Chart.js via JS interop
+- react-leaflet → Leaflet via JS interop
+
+## Build
+
+```bash
+dotnet build RenewableDashboard.sln
+```

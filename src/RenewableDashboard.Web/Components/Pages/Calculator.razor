@@ -1,0 +1,337 @@
+@page "/calculator"
+@using RenewableDashboard.Core.DTOs
+@using RenewableDashboard.Core.Services
+@using RenewableDashboard.Web.Services
+@inject CalculatorService CalculatorService
+@inject LocationStateService LocationState
+@inject CalculatorStateService CalculatorState
+@inject ChartJsInterop ChartJs
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+<PageTitle>Calculator - Renewable Dashboard</PageTitle>
+
+<div class="dashboard-page">
+    <div class="dashboard-container">
+        <section class="hero-section indigo">
+            <div class="hero-grid cols-2">
+                <div>
+                    <div class="badge blue">Project Economics</div>
+                    <h1 class="hero-title" style="font-size: clamp(2rem, 4vw, 3rem);">Renewable project economics calculator</h1>
+                    <p class="hero-text">
+                        Evaluate renewable energy project returns using editable assumptions,
+                        selected market inputs, and location-based electricity pricing.
+                    </p>
+                    <div class="pill-row">
+                        <span class="pill">Scenario testing</span>
+                        <span class="pill">Manual vs map pricing</span>
+                        <span class="pill">Cash flow analysis</span>
+                    </div>
+                </div>
+
+                <div class="glass-panel">
+                    <p class="panel-label">Active Run</p>
+                    <div class="stat-grid cols-2">
+                        <div class="stat-card span-2">
+                            <p class="stat-label">Scenario</p>
+                            <p class="stat-value">@ScenarioLabel</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Rate Source</p>
+                            <p class="stat-value emerald">@_rateMode</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-label">Active Rate</p>
+                            <p class="stat-value blue">${ActiveElectricityRate:F3}/kWh</p>
+                        </div>
+                    </div>
+                    <div class="highlight-box">
+                        <p style="color: var(--emerald-200); font-size: 0.875rem;">Current Context</p>
+                        <p class="step-text" style="margin-top: 0.5rem;">
+                            @(LocationState.SelectedLocation is not null
+                                ? $"{LocationState.SelectedLocation.Name} is available as a map-based pricing source at ${LocationState.SelectedLocation.ElectricityRate}/kWh."
+                                : "No map location selected yet. You can still run manual scenarios or choose a state from the Map tab.")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (LocationState.SelectedLocation is not null)
+        {
+            <section class="highlight-box" style="border-color: rgba(52, 211, 153, 0.2);">
+                <h2 style="color: var(--emerald-200); font-size: 1.125rem;">Map selection connected</h2>
+                <p class="step-text">@LocationState.SelectedLocation.Name selected — electricity rate available at $@LocationState.SelectedLocation.ElectricityRate/kWh</p>
+            </section>
+        }
+
+        <section class="content-grid cols-calc">
+            <div class="white-card">
+                <p class="section-subtitle">Inputs</p>
+                <h2 class="section-title" style="font-size: 1.5rem;">Configure project assumptions</h2>
+
+                <div style="margin-top: 1.25rem;">
+                    <div class="form-group">
+                        <label class="form-label">Scenario</label>
+                        <select class="form-select" @bind="_scenario" @bind:after="OnInputsChanged">
+                            <option value="base">Base Case</option>
+                            <option value="optimistic">Optimistic Case</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rate Source</label>
+                        <select class="form-select" @bind="_rateMode" @bind:after="OnRateModeChanged">
+                            <option value="manual">Manual Only</option>
+                            <option value="map">Map Only</option>
+                            <option value="compare">Compare Both</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">System Size (kW)</label>
+                        <input type="number" class="form-input" @bind="_systemSizeKw" @bind:after="OnInputsChanged" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Capacity Factor (%)</label>
+                        <input type="number" class="form-input" @bind="_capacityFactor" @bind:after="OnInputsChanged" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Installation Cost ($/W)</label>
+                        <input type="number" step="0.01" class="form-input" @bind="_installCostPerW" @bind:after="OnInputsChanged" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Manual Electricity Rate ($/kWh)</label>
+                        <input type="number" step="0.01" class="form-input" @bind="_electricityRate" @bind:after="OnInputsChanged" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Annual O&amp;M Cost ($)</label>
+                        <input type="number" class="form-input" @bind="_annualOMCost" @bind:after="OnInputsChanged" />
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div class="white-card">
+                    <p class="section-subtitle">Outputs</p>
+                    <h2 class="section-title" style="font-size: 1.5rem;">Active project results</h2>
+
+                    <div class="rate-highlight">
+                        <p style="color: var(--emerald-700); font-weight: 500; font-size: 0.875rem;">Active Electricity Rate</p>
+                        <p style="font-size: 1.5rem; font-weight: 700; color: var(--emerald-900);">${ActiveElectricityRate:F3} / kWh</p>
+                        <p style="font-size: 0.75rem; color: var(--emerald-700);">@ActiveRateDescription</p>
+                    </div>
+
+                    <div class="output-grid">
+                        <div class="output-card">
+                            <p class="kpi-title">Total Project Cost</p>
+                            <p class="kpi-value" style="font-size: 1.5rem;">$@ActiveMetrics.TotalProjectCost.ToString("N0")</p>
+                        </div>
+                        <div class="output-card">
+                            <p class="kpi-title">Annual Revenue</p>
+                            <p class="kpi-value" style="font-size: 1.5rem;">$@ActiveMetrics.AnnualRevenue.ToString("N0")</p>
+                        </div>
+                        <div class="output-card">
+                            <p class="kpi-title">Net Operating Income</p>
+                            <p class="kpi-value" style="font-size: 1.5rem;">$@ActiveMetrics.NetOperatingIncome.ToString("N0")</p>
+                        </div>
+                        <div class="output-card">
+                            <p class="kpi-title">NPV</p>
+                            <p class="kpi-value" style="font-size: 1.5rem;">$@ActiveMetrics.Npv.ToString("N0")</p>
+                        </div>
+                        <div class="output-card">
+                            <p class="kpi-title">Annual Energy Production</p>
+                            <p class="kpi-value" style="font-size: 1.5rem;">@ActiveMetrics.AnnualEnergyProduction.ToString("N0") kWh</p>
+                        </div>
+                        <div class="output-card">
+                            <p class="kpi-title">Simple Payback Period</p>
+                            <p class="kpi-value" style="font-size: 1.5rem;">
+                                @(ActiveMetrics.PaybackPeriod.HasValue ? $"{ActiveMetrics.PaybackPeriod:F1} years" : "Not achievable")
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (_rateMode == "compare")
+        {
+            <section class="content-grid cols-compare">
+                <div class="white-card">
+                    <h2 class="section-title" style="font-size: 1.5rem;">Manual Rate Results</h2>
+                    <p class="kpi-subtitle" style="margin-top: 1rem;">Rate: ${ManualRate:F3}/kWh</p>
+                    <div style="margin-top: 1rem;">
+                        <p>Annual Revenue: <strong>$@ManualMetrics.AnnualRevenue.ToString("N0")</strong></p>
+                        <p>NOI: <strong>$@ManualMetrics.NetOperatingIncome.ToString("N0")</strong></p>
+                        <p>NPV: <strong>$@ManualMetrics.Npv.ToString("N0")</strong></p>
+                    </div>
+                </div>
+                <div class="white-card">
+                    <h2 class="section-title" style="font-size: 1.5rem;">Map Rate Results</h2>
+                    <p class="kpi-subtitle" style="margin-top: 1rem;">Rate: ${MapRate:F3}/kWh</p>
+                    <div style="margin-top: 1rem;">
+                        <p>Annual Revenue: <strong>$@MapMetrics.AnnualRevenue.ToString("N0")</strong></p>
+                        <p>NOI: <strong>$@MapMetrics.NetOperatingIncome.ToString("N0")</strong></p>
+                        <p>NPV: <strong>$@MapMetrics.Npv.ToString("N0")</strong></p>
+                    </div>
+                </div>
+                <div class="white-card" style="border-color: var(--emerald-200); background: linear-gradient(135deg, var(--emerald-50), white);">
+                    <h2 class="section-title" style="font-size: 1.5rem;">Comparison Readout</h2>
+                    <div style="margin-top: 1rem;">
+                        <p>Revenue Delta: <strong class="@(CompareDelta.Revenue >= 0 ? "positive" : "negative")">@FormatDelta(CompareDelta.Revenue)</strong></p>
+                        <p>NOI Delta: <strong class="@(CompareDelta.Noi >= 0 ? "positive" : "negative")">@FormatDelta(CompareDelta.Noi)</strong></p>
+                        <p>NPV Delta: <strong class="@(CompareDelta.Npv >= 0 ? "positive" : "negative")">@FormatDelta(CompareDelta.Npv)</strong></p>
+                    </div>
+                </div>
+            </section>
+        }
+
+        <section class="white-card">
+            <h2 class="section-title">Project cash flow chart</h2>
+            <p class="section-subtitle">Year 0 reflects project investment and later years reflect annual NOI.</p>
+            <div class="chart-container" style="margin-top: 1.5rem;">
+                <div class="chart-canvas-wrap">
+                    <canvas id="calculator-bar-chart"></canvas>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+@code {
+    private string _scenario = "base";
+    private string _rateMode = "manual";
+    private decimal _systemSizeKw = 5000;
+    private decimal _capacityFactor = 25;
+    private decimal _installCostPerW = 1.2m;
+    private decimal _electricityRate = 0.12m;
+    private decimal _annualOMCost = 50000;
+
+    private string ScenarioLabel => _scenario == "base" ? "Base Case" : "Optimistic Case";
+
+    private (decimal CapacityFactor, decimal OmCost, decimal Rate) ScenarioAdjustments =>
+        CalculatorService.ApplyScenario(_scenario, _capacityFactor, _annualOMCost, _electricityRate);
+
+    private decimal ManualRate
+    {
+        get
+        {
+            var (_, _, rate) = ScenarioAdjustments;
+            return rate;
+        }
+    }
+
+    private decimal MapRate
+    {
+        get
+        {
+            var mapBase = LocationState.SelectedLocation?.ElectricityRate ?? _electricityRate;
+            var (_, _, manualRate) = ScenarioAdjustments;
+            var optimisticBonus = _scenario == "optimistic" ? 0.02m : 0m;
+            return (_rateMode == "map" || LocationState.SelectedLocation is not null ? mapBase : manualRate) + optimisticBonus;
+        }
+    }
+
+    private CalculatorMetrics ManualMetrics
+    {
+        get
+        {
+            var (cap, om, rate) = ScenarioAdjustments;
+            return CalculatorService.CalculateMetrics(_systemSizeKw, cap, _installCostPerW, rate, om);
+        }
+    }
+
+    private CalculatorMetrics MapMetrics
+    {
+        get
+        {
+            var (cap, om, _) = ScenarioAdjustments;
+            return CalculatorService.CalculateMetrics(_systemSizeKw, cap, _installCostPerW, MapRate, om);
+        }
+    }
+
+    private CalculatorMetrics ActiveMetrics => _rateMode == "map" ? MapMetrics : ManualMetrics;
+    private decimal ActiveElectricityRate => _rateMode == "map" ? MapRate : ManualRate;
+
+    private string ActiveRateDescription => _rateMode switch
+    {
+        "manual" => "Using manually entered electricity rate",
+        "map" => $"Using {LocationState.SelectedLocation?.Name ?? "selected map"} electricity rate",
+        _ => "Compare mode enabled — primary view currently shows manual rate"
+    };
+
+    private (decimal Revenue, decimal Noi, decimal Npv) CompareDelta => (
+        MapMetrics.AnnualRevenue - ManualMetrics.AnnualRevenue,
+        MapMetrics.NetOperatingIncome - ManualMetrics.NetOperatingIncome,
+        MapMetrics.Npv - ManualMetrics.Npv);
+
+    protected override void OnInitialized()
+    {
+        LocationState.OnChange += OnLocationChanged;
+        UpdateSnapshot();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await RenderChartAsync();
+    }
+
+    private void OnInputsChanged()
+    {
+        UpdateSnapshot();
+        _ = RenderChartAsync();
+    }
+
+    private void OnRateModeChanged()
+    {
+        if (_rateMode == "map" && LocationState.SelectedLocation is null)
+        {
+            Navigation.NavigateTo("/map?message=select-location");
+            return;
+        }
+
+        UpdateSnapshot();
+        _ = RenderChartAsync();
+    }
+
+    private void OnLocationChanged()
+    {
+        UpdateSnapshot();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateSnapshot()
+    {
+        var metrics = ActiveMetrics;
+        CalculatorState.SetSnapshot(new CalculatorSnapshotDto
+        {
+            Scenario = _scenario,
+            RateMode = _rateMode,
+            ManualElectricityRate = _electricityRate,
+            ActiveElectricityRate = ActiveElectricityRate,
+            TotalProjectCost = metrics.TotalProjectCost,
+            AnnualRevenue = metrics.AnnualRevenue,
+            NetOperatingIncome = metrics.NetOperatingIncome,
+            PaybackPeriod = metrics.PaybackPeriod,
+            Npv = metrics.Npv
+        });
+    }
+
+    private async Task RenderChartAsync()
+    {
+        var cashFlow = CalculatorService.BuildCashFlowData(ActiveMetrics.TotalProjectCost, ActiveMetrics.NetOperatingIncome);
+        await ChartJs.DestroyChartAsync("calculator-bar-chart");
+        await ChartJs.CreateBarChartAsync(
+            "calculator-bar-chart",
+            cashFlow.Select(c => c.Year).ToArray(),
+            cashFlow.Select(c => c.CashFlow).ToArray());
+    }
+
+    private static string FormatDelta(decimal value) =>
+        $"{(value >= 0 ? "+" : "")}${value:N0}";
+
+    public async ValueTask DisposeAsync()
+    {
+        LocationState.OnChange -= OnLocationChanged;
+        await ChartJs.DisposeAsync();
+    }
+}
