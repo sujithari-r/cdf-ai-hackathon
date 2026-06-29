@@ -1,0 +1,95 @@
+@page "/scenarios"
+@rendermode InteractiveServer
+@inject IProjectScenarioRepository ScenarioRepository
+@inject ISnackbar Snackbar
+
+<PageTitle>Saved Scenarios - Renewable Dashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Saved Scenarios</MudText>
+<MudText Typo="Typo.subtitle1" Class="mb-4" Style="color: #6b7280;">Review and manage previously saved project calculations</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (!_scenarios.Any())
+{
+    <MudPaper Elevation="2" Class="pa-8 d-flex flex-column align-center justify-center">
+        <MudIcon Icon="@Icons.Material.Filled.BookmarkBorder" Style="font-size: 64px; color: #d1d5db;" />
+        <MudText Typo="Typo.h6" Class="mt-3" Style="color: #6b7280;">No saved scenarios yet</MudText>
+        <MudText Typo="Typo.body2" Style="color: #9ca3af;">Run the calculator and save a scenario to see it here.</MudText>
+        <MudButton Href="/calculator" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" StartIcon="@Icons.Material.Filled.Calculate">
+            Go to Calculator
+        </MudButton>
+    </MudPaper>
+}
+else
+{
+    <MudTable Items="@_scenarios" Hover="true" Striped="true" Elevation="2">
+        <HeaderContent>
+            <MudTh>Name</MudTh>
+            <MudTh>Location</MudTh>
+            <MudTh>Scenario</MudTh>
+            <MudTh>System (kW)</MudTh>
+            <MudTh>NPV</MudTh>
+            <MudTh>Payback</MudTh>
+            <MudTh>NOI</MudTh>
+            <MudTh>Saved</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Name</MudTd>
+            <MudTd>@(context.LocationName ?? "—")</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@(context.ScenarioType == "optimistic" ? Color.Success : Color.Default)">
+                    @context.ScenarioType
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.SystemSizeKw.ToString("N0")</MudTd>
+            <MudTd Style="@(context.Npv >= 0 ? "color:#22c55e; font-weight:600;" : "color:#ef4444; font-weight:600;")">
+                @FormatCurrency(context.Npv)
+            </MudTd>
+            <MudTd>@(context.PaybackPeriod?.ToString("F1") ?? "N/A") yrs</MudTd>
+            <MudTd>@FormatCurrency(context.NetOperatingIncome)</MudTd>
+            <MudTd>@context.CreatedAt.ToString("MMM dd, yyyy")</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                               OnClick="@(() => DeleteScenario(context.Id))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<RenewableDashboard.Core.Entities.ProjectScenario> _scenarios = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadScenarios();
+    }
+
+    private async Task LoadScenarios()
+    {
+        _loading = true;
+        var result = await ScenarioRepository.GetAllAsync();
+        _scenarios = result.ToList();
+        _loading = false;
+    }
+
+    private async Task DeleteScenario(int id)
+    {
+        await ScenarioRepository.DeleteAsync(id);
+        Snackbar.Add("Scenario deleted.", Severity.Info);
+        await LoadScenarios();
+    }
+
+    private static string FormatCurrency(double value)
+    {
+        if (Math.Abs(value) >= 1_000_000)
+            return $"${value / 1_000_000:F2}M";
+        if (Math.Abs(value) >= 1_000)
+            return $"${value / 1_000:F1}K";
+        return $"${value:F0}";
+    }
+}

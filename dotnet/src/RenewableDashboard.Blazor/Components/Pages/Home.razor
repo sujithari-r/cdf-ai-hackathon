@@ -1,0 +1,144 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject IMarketService MarketService
+@inject DashboardStateService State
+
+<PageTitle>Renewable Dashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Investment Dashboard</MudText>
+<MudText Typo="Typo.subtitle1" Class="mb-4" Style="color: #6b7280;">U.S. Renewable Energy Market Overview</MudText>
+
+@if (_loading)
+{
+    <MudGrid>
+        @for (int i = 0; i < 5; i++)
+        {
+            <MudItem xs="12" sm="6" md="4" lg="2">
+                <MudSkeleton Height="120px" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center" Style="border-left: 4px solid #22c55e;">
+                <MudIcon Icon="@Icons.Material.Filled.Bolt" Style="color: #22c55e;" Class="mb-2" />
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">Electricity Price</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">@(_marketData?.ElectricityPrice.ToString("F4") ?? "--")</MudText>
+                <MudText Typo="Typo.caption">$/kWh</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center" Style="border-left: 4px solid #3b82f6;">
+                <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Style="color: #3b82f6;" Class="mb-2" />
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">Capacity Growth</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">@(_marketData?.CapacityGrowth.ToString("F1") ?? "--")%</MudText>
+                <MudText Typo="Typo.caption">Annual</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center" Style="border-left: 4px solid #f59e0b;">
+                <MudIcon Icon="@Icons.Material.Filled.EnergySavingsLeaf" Style="color: #f59e0b;" Class="mb-2" />
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">Renewable Share</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">@(_marketData?.RenewableShare.ToString("F0") ?? "--")%</MudText>
+                <MudText Typo="Typo.caption">Of Grid</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center" Style="border-left: 4px solid #8b5cf6;">
+                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Style="color: #8b5cf6;" Class="mb-2" />
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">Selected Location</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">@(State.SelectedLocation?.Name ?? "None")</MudText>
+                <MudText Typo="Typo.caption">@(State.SelectedLocation != null ? $"${State.SelectedLocation.ElectricityRate:F4}/kWh" : "Select on Map")</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            <MudPaper Elevation="2" Class="pa-4 d-flex flex-column align-center" Style="border-left: 4px solid #06b6d4;">
+                <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Style="color: #06b6d4;" Class="mb-2" />
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">Project NPV</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">@(State.CalculatorSnapshot != null ? FormatCurrency(State.CalculatorSnapshot.Npv) : "N/A")</MudText>
+                <MudText Typo="Typo.caption">20-Year</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Class="mt-6">
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Quick Actions</MudText>
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudButton Href="/calculator" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Calculate" Class="mb-2">
+                            Run Financial Model
+                        </MudButton>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudButton Href="/map" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Map" Class="mb-2">
+                            Select Location
+                        </MudButton>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudButton Href="/market" Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true" StartIcon="@Icons.Material.Filled.ShowChart" Class="mb-2">
+                            Market Analysis
+                        </MudButton>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudButton Href="/assistant" Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true" StartIcon="@Icons.Material.Filled.SmartToy" Class="mb-2">
+                            Ask AI Assistant
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Calculator Summary</MudText>
+                @if (State.CalculatorSnapshot != null)
+                {
+                    var snap = State.CalculatorSnapshot;
+                    <MudList T="string" Dense="true">
+                        <MudListItem Icon="@Icons.Material.Filled.Factory">Total Cost: @FormatCurrency(snap.TotalProjectCost)</MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.ElectricBolt">Annual Revenue: @FormatCurrency(snap.AnnualRevenue)</MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Savings">NOI: @FormatCurrency(snap.NetOperatingIncome)</MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Timer">Payback: @(snap.PaybackPeriod?.ToString("F1") ?? "N/A") yrs</MudListItem>
+                    </MudList>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Style="color: #6b7280;">Run the calculator to see financial summary.</MudText>
+                    <MudButton Href="/calculator" Variant="Variant.Text" Color="Color.Primary" Class="mt-2">Go to Calculator</MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private MarketDataDto? _marketData;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _marketData = await MarketService.GetMarketDataAsync();
+        _loading = false;
+        State.OnChange += StateHasChanged;
+    }
+
+    public void Dispose() => State.OnChange -= StateHasChanged;
+
+    private static string FormatCurrency(double value)
+    {
+        if (Math.Abs(value) >= 1_000_000)
+            return $"${value / 1_000_000:F1}M";
+        if (Math.Abs(value) >= 1_000)
+            return $"${value / 1_000:F0}K";
+        return $"${value:F0}";
+    }
+}

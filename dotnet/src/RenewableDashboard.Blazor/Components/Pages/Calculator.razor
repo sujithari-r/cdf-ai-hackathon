@@ -1,0 +1,245 @@
+@page "/calculator"
+@rendermode InteractiveServer
+@inject CalculatorService CalculatorService
+@inject DashboardStateService State
+@inject IProjectScenarioRepository ScenarioRepository
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Calculator - Renewable Dashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Project Economics Calculator</MudText>
+<MudText Typo="Typo.subtitle1" Class="mb-4" Style="color: #6b7280;">20-Year financial model for renewable energy projects</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="4">
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Project Parameters</MudText>
+
+            <MudNumericField @bind-Value="_input.SystemSizeKw" Label="System Size (kW)" Min="1" Max="100000" Step="10" Class="mb-3" />
+            <MudNumericField @bind-Value="_input.CapacityFactor" Label="Capacity Factor (%)" Min="1" Max="100" Step="1" Class="mb-3" />
+            <MudNumericField @bind-Value="_input.InstallCostPerW" Label="Install Cost ($/W)" Min="0.1" Max="10" Step="0.05" Format="F2" Class="mb-3" />
+            <MudNumericField @bind-Value="_input.OmCost" Label="Annual O&M Cost ($)" Min="0" Step="500" Class="mb-3" />
+
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Rate Source</MudText>
+            <MudRadioGroup @bind-Value="_input.RateMode" Class="mb-3">
+                <MudRadio Value="@("manual")" Color="Color.Primary">Manual Rate</MudRadio>
+                <MudRadio Value="@("map")" Color="Color.Primary" Disabled="@(State.SelectedLocation == null)">Map Rate (@(State.SelectedLocation?.Name ?? "none selected"))</MudRadio>
+                <MudRadio Value="@("compare")" Color="Color.Primary" Disabled="@(State.SelectedLocation == null)">Compare Both</MudRadio>
+            </MudRadioGroup>
+
+            @if (_input.RateMode == "manual" || _input.RateMode == "compare")
+            {
+                <MudNumericField @bind-Value="_input.ElectricityRate" Label="Manual Rate ($/kWh)" Min="0.01" Max="1" Step="0.01" Format="F4" Class="mb-3" />
+            }
+
+            @if (_input.RateMode == "map" && State.SelectedLocation == null)
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-3">
+                    <MudLink Href="/map">Select a location on the map</MudLink> to use location-based rates.
+                </MudAlert>
+            }
+
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Scenario</MudText>
+            <MudRadioGroup @bind-Value="_input.Scenario" Class="mb-3">
+                <MudRadio Value="@("base")" Color="Color.Primary">Base Case</MudRadio>
+                <MudRadio Value="@("optimistic")" Color="Color.Primary">Optimistic (+3% CF, +$0.02 rate, -5% O&M)</MudRadio>
+            </MudRadioGroup>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="RunCalculator" StartIcon="@Icons.Material.Filled.Calculate" Class="mb-2">
+                Calculate
+            </MudButton>
+
+            @if (_result != null)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true" OnClick="SaveScenario" StartIcon="@Icons.Material.Filled.Save">
+                    Save Scenario
+                </MudButton>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="8">
+        @if (_result != null)
+        {
+            <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Results — @_input.Scenario.ToUpper() Scenario</MudText>
+                <MudGrid>
+                    <MudItem xs="6" sm="4">
+                        <div class="result-card">
+                            <MudText Typo="Typo.caption" Style="color:#6b7280;">Total Project Cost</MudText>
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">@FormatCurrency(_result.TotalProjectCost)</MudText>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="6" sm="4">
+                        <div class="result-card">
+                            <MudText Typo="Typo.caption" Style="color:#6b7280;">Annual Energy</MudText>
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">@(_result.AnnualEnergyProduction.ToString("N0")) kWh</MudText>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="6" sm="4">
+                        <div class="result-card">
+                            <MudText Typo="Typo.caption" Style="color:#6b7280;">Annual Revenue</MudText>
+                            <MudText Typo="Typo.h6" Class="font-weight-bold" Style="color:#22c55e;">@FormatCurrency(_result.AnnualRevenue)</MudText>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="6" sm="4">
+                        <div class="result-card">
+                            <MudText Typo="Typo.caption" Style="color:#6b7280;">Net Operating Income</MudText>
+                            <MudText Typo="Typo.h6" Class="font-weight-bold" Style="@(_result.NetOperatingIncome >= 0 ? "color:#22c55e;" : "color:#ef4444;")">@FormatCurrency(_result.NetOperatingIncome)</MudText>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="6" sm="4">
+                        <div class="result-card">
+                            <MudText Typo="Typo.caption" Style="color:#6b7280;">Payback Period</MudText>
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">@(_result.PaybackPeriod?.ToString("F1") ?? "N/A") yrs</MudText>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="6" sm="4">
+                        <div class="result-card">
+                            <MudText Typo="Typo.caption" Style="color:#6b7280;">20-Year NPV</MudText>
+                            <MudText Typo="Typo.h6" Class="font-weight-bold" Style="@(_result.Npv >= 0 ? "color:#22c55e;" : "color:#ef4444;")">@FormatCurrency(_result.Npv)</MudText>
+                        </div>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            @if (_result.CompareResult != null)
+            {
+                <MudPaper Elevation="2" Class="pa-4 mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Rate Comparison: Manual vs Map (@State.SelectedLocation?.Name)</MudText>
+                    <MudTable Items="@_compareRows" Hover="true" Dense="true">
+                        <HeaderContent>
+                            <MudTh>Metric</MudTh>
+                            <MudTh>Manual ($@_input.ElectricityRate.ToString("F4")/kWh)</MudTh>
+                            <MudTh>Map ($@State.SelectedLocation?.ElectricityRate.ToString("F4")/kWh)</MudTh>
+                            <MudTh>Delta</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.Metric</MudTd>
+                            <MudTd>@context.Manual</MudTd>
+                            <MudTd>@context.Map</MudTd>
+                            <MudTd Style="@(context.DeltaPositive ? "color:#22c55e;" : "color:#ef4444;")">@context.Delta</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            }
+
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">20-Year Cash Flow</MudText>
+                <div style="overflow-x: auto;">
+                    <div style="display: flex; align-items: flex-end; gap: 4px; height: 200px; padding: 8px 0;">
+                        @{
+                            double maxAbs = _result.CashFlows.Max(c => Math.Abs(c.Amount));
+                        }
+                        @foreach (var cf in _result.CashFlows)
+                        {
+                            double heightPct = maxAbs > 0 ? (Math.Abs(cf.Amount) / maxAbs) * 100 : 0;
+                            bool isNeg = cf.Amount < 0;
+                            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 12px;" title="Year @cf.Year: @FormatCurrency(cf.Amount)">
+                                @if (!isNeg)
+                                {
+                                    <div style="width: 100%; background: #22c55e; border-radius: 2px 2px 0 0; height: @heightPct.ToString("F1")%;"></div>
+                                }
+                                else
+                                {
+                                    <div style="width: 100%; background: #ef4444; border-radius: 2px 2px 0 0; height: @heightPct.ToString("F1")%;"></div>
+                                }
+                                <div style="font-size: 9px; color: #6b7280; margin-top: 2px;">@cf.Year</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <MudText Typo="Typo.caption" Style="color:#6b7280;">Year 0 = capital expenditure (red); Years 1-20 = annual net operating income (green)</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudPaper Elevation="2" Class="pa-8 d-flex flex-column align-center justify-center" Style="min-height: 300px;">
+                <MudIcon Icon="@Icons.Material.Filled.Calculate" Style="font-size: 64px; color: #d1d5db;" />
+                <MudText Typo="Typo.h6" Class="mt-3" Style="color: #6b7280;">Configure parameters and click Calculate</MudText>
+            </MudPaper>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private CalculatorInputDto _input = new();
+    private CalculatorResultDto? _result;
+    private List<CompareRow> _compareRows = new();
+
+    protected override void OnInitialized()
+    {
+        if (State.LastCalculatorInput != null)
+            _input = State.LastCalculatorInput;
+        State.OnChange += StateHasChanged;
+    }
+
+    private void RunCalculator()
+    {
+        if (_input.RateMode == "map" && State.SelectedLocation != null)
+            _input.MapElectricityRate = State.SelectedLocation.ElectricityRate;
+        else if (_input.RateMode == "compare" && State.SelectedLocation != null)
+            _input.MapElectricityRate = State.SelectedLocation.ElectricityRate;
+
+        _result = CalculatorService.Calculate(_input);
+        State.SetCalculatorResult(_result, _input);
+
+        if (_result.CompareResult != null)
+        {
+            _compareRows = new List<CompareRow>
+            {
+                new("Annual Revenue", FormatCurrency(_result.AnnualRevenue), FormatCurrency(_result.CompareResult.AnnualRevenue), _result.CompareResult.AnnualRevenue - _result.AnnualRevenue),
+                new("Net Operating Income", FormatCurrency(_result.NetOperatingIncome), FormatCurrency(_result.CompareResult.NetOperatingIncome), _result.CompareResult.NetOperatingIncome - _result.NetOperatingIncome),
+                new("20-Year NPV", FormatCurrency(_result.Npv), FormatCurrency(_result.CompareResult.Npv), _result.CompareResult.Npv - _result.Npv),
+                new("Payback (yrs)", _result.PaybackPeriod?.ToString("F1") ?? "N/A", _result.CompareResult.PaybackPeriod?.ToString("F1") ?? "N/A", (_result.PaybackPeriod ?? 0) - (_result.CompareResult.PaybackPeriod ?? 0), invert: true),
+            };
+        }
+    }
+
+    private async Task SaveScenario()
+    {
+        if (_result == null) return;
+        var scenario = new RenewableDashboard.Core.Entities.ProjectScenario
+        {
+            Name = $"Scenario {DateTime.Now:yyyy-MM-dd HH:mm}",
+            ScenarioType = _input.Scenario,
+            RateMode = _input.RateMode,
+            SystemSizeKw = _input.SystemSizeKw,
+            CapacityFactor = _input.CapacityFactor,
+            InstallCostPerW = _input.InstallCostPerW,
+            ManualElectricityRate = _input.ElectricityRate,
+            ActiveElectricityRate = _result.ActiveElectricityRate,
+            OmCost = _input.OmCost,
+            TotalProjectCost = _result.TotalProjectCost,
+            AnnualEnergyProduction = _result.AnnualEnergyProduction,
+            AnnualRevenue = _result.AnnualRevenue,
+            NetOperatingIncome = _result.NetOperatingIncome,
+            PaybackPeriod = _result.PaybackPeriod,
+            Npv = _result.Npv,
+            LocationName = State.SelectedLocation?.Name
+        };
+        await ScenarioRepository.AddAsync(scenario);
+        Snackbar.Add("Scenario saved!", Severity.Success);
+    }
+
+    public void Dispose() => State.OnChange -= StateHasChanged;
+
+    private static string FormatCurrency(double value)
+    {
+        if (Math.Abs(value) >= 1_000_000)
+            return $"${value / 1_000_000:F2}M";
+        if (Math.Abs(value) >= 1_000)
+            return $"${value / 1_000:F1}K";
+        return $"${value:F0}";
+    }
+
+    private record CompareRow(string Metric, string Manual, string Map, double RawDelta, bool invert = false)
+    {
+        public string Delta => RawDelta >= 0 ? $"+{FormatDelta(RawDelta)}" : FormatDelta(RawDelta);
+        public bool DeltaPositive => invert ? RawDelta <= 0 : RawDelta >= 0;
+        private static string FormatDelta(double v) => Math.Abs(v) >= 1000 ? $"${v / 1000:F1}K" : $"${v:F0}";
+    }
+}

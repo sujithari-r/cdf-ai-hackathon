@@ -1,0 +1,140 @@
+@page "/market"
+@rendermode InteractiveServer
+@inject IMarketService MarketService
+
+<PageTitle>Market Analysis - Renewable Dashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Market Analysis</MudText>
+<MudText Typo="Typo.subtitle1" Class="mb-4" Style="color: #6b7280;">U.S. Retail Electricity Price Trends</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+else if (_marketData != null)
+{
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-3 text-center">
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">Latest Price</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold" Color="Color.Primary">$@_marketData.ElectricityPrice.ToString("F4")/kWh</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-3 text-center">
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">12-Month Average</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">$@_average.ToString("F4")/kWh</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-3 text-center">
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">Price Range</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">$@_min.ToString("F4") – $@_max.ToString("F4")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-3 text-center">
+                <MudText Typo="Typo.caption" Style="color: #6b7280;">Trend</MudText>
+                <MudText Typo="Typo.h5" Class="font-weight-bold" Style="@(_trendUp ? "color:#22c55e;" : "color:#ef4444;")">
+                    @(_trendUp ? "↑ Up" : "↓ Down") @_pctChange.ToString("F1")%
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Elevation="2" Class="pa-4 mb-4">
+        <MudToolBar Class="mb-3 px-0">
+            <MudText Typo="Typo.h6">Electricity Price Trend</MudText>
+            <MudSpacer />
+            <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
+                <MudButton OnClick="@(() => _filter = "6M")" Variant="@(_filter == "6M" ? Variant.Filled : Variant.Outlined)">6M</MudButton>
+                <MudButton OnClick="@(() => _filter = "ALL")" Variant="@(_filter == "ALL" ? Variant.Filled : Variant.Outlined)">ALL</MudButton>
+            </MudButtonGroup>
+        </MudToolBar>
+
+        @{
+            var displayedTrend = _filter == "6M" ? _marketData.Trend.TakeLast(6).ToList() : _marketData.Trend;
+        }
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f9fafb;">
+                        <th style="padding: 8px 16px; text-align: left; font-size: 12px; color: #6b7280; border-bottom: 1px solid #e5e7eb;">Month</th>
+                        <th style="padding: 8px 16px; text-align: right; font-size: 12px; color: #6b7280; border-bottom: 1px solid #e5e7eb;">Price ($/kWh)</th>
+                        <th style="padding: 8px 16px; text-align: left; font-size: 12px; color: #6b7280; border-bottom: 1px solid #e5e7eb;">Chart</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        double maxPrice = displayedTrend.Any() ? displayedTrend.Max(t => t.Price) : 1;
+                    }
+                    @foreach (var point in displayedTrend)
+                    {
+                        double barWidth = maxPrice > 0 ? (point.Price / maxPrice) * 100 : 0;
+                        <tr style="border-bottom: 1px solid #f3f4f6;">
+                            <td style="padding: 8px 16px; font-size: 14px;">@point.Month</td>
+                            <td style="padding: 8px 16px; text-align: right; font-size: 14px; font-weight: 600;">$@point.Price.ToString("F4")</td>
+                            <td style="padding: 8px 16px; width: 50%;">
+                                <div style="background: #e5e7eb; border-radius: 4px; height: 8px;">
+                                    <div style="background: #22c55e; border-radius: 4px; height: 8px; width: @barWidth.ToString("F1")%;"></div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </MudPaper>
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">
+                    <MudIcon Icon="@Icons.Material.Filled.EnergySavingsLeaf" Class="mr-1" Style="color: #22c55e;" />
+                    Capacity Growth
+                </MudText>
+                <MudText Typo="Typo.h3" Class="font-weight-bold" Color="Color.Primary">@_marketData.CapacityGrowth.ToString("F1")%</MudText>
+                <MudText Typo="Typo.body2" Style="color: #6b7280;">Annual renewable capacity growth rate across the U.S. grid.</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-2">
+                    <MudIcon Icon="@Icons.Material.Filled.Spa" Class="mr-1" Style="color: #22c55e;" />
+                    Renewable Share
+                </MudText>
+                <MudText Typo="Typo.h3" Class="font-weight-bold" Color="Color.Primary">@_marketData.RenewableShare.ToString("F0")%</MudText>
+                <MudText Typo="Typo.body2" Style="color: #6b7280;">Current percentage of U.S. electricity generation from renewable sources.</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+else
+{
+    <MudAlert Severity="Severity.Warning">Unable to load market data. Please check your EIA API key configuration.</MudAlert>
+}
+
+@code {
+    private MarketDataDto? _marketData;
+    private bool _loading = true;
+    private string _filter = "ALL";
+    private double _average, _min, _max, _pctChange;
+    private bool _trendUp;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _marketData = await MarketService.GetMarketDataAsync();
+        if (_marketData?.Trend.Any() == true)
+        {
+            var prices = _marketData.Trend.Select(t => t.Price).ToList();
+            _average = prices.Average();
+            _min = prices.Min();
+            _max = prices.Max();
+            var first = prices.First();
+            var last = prices.Last();
+            _pctChange = first > 0 ? ((last - first) / first) * 100 : 0;
+            _trendUp = last >= first;
+        }
+        _loading = false;
+    }
+}

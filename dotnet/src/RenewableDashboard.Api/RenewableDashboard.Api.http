@@ -1,0 +1,6 @@
+@RenewableDashboard.Api_HostAddress = http://localhost:5241
+
+GET {{RenewableDashboard.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

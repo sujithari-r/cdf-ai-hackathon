@@ -1,0 +1,50 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_theme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Dark">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
+        <MudText Typo="Typo.h6" Class="ml-2">
+            <MudIcon Icon="@Icons.Material.Filled.Bolt" Class="mr-1" Style="color: #4ade80;" />
+            Renewable Dashboard
+        </MudText>
+        <MudSpacer />
+        <MudText Typo="Typo.caption" Class="d-none d-sm-flex" Style="color: rgba(255,255,255,0.7);">
+            U.S. Renewable Energy Investment Analysis
+        </MudText>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Responsive" ClipMode="DrawerClipMode.Always">
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#22c55e",
+            Secondary = "#3b82f6",
+            AppbarBackground = "#111827",
+            Background = "#f0fdf4",
+            Surface = "#ffffff",
+            DrawerBackground = "#1f2937",
+            DrawerText = "rgba(255,255,255,0.87)",
+            DrawerIcon = "rgba(255,255,255,0.87)"
+        }
+    };
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+}

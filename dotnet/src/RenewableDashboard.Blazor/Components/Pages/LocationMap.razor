@@ -1,0 +1,147 @@
+@page "/map"
+@rendermode InteractiveServer
+@inject ILocationRepository LocationRepository
+@inject DashboardStateService State
+@inject ISnackbar Snackbar
+
+<PageTitle>Location Map - Renewable Dashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Location Map</MudText>
+<MudText Typo="Typo.subtitle1" Class="mb-4" Style="color: #6b7280;">Select a U.S. state to use its electricity rate in the calculator</MudText>
+
+@if (_message != null)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="() => _message = null">@_message</MudAlert>
+}
+
+<MudGrid>
+    <MudItem xs="12" md="4">
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Available Locations</MudText>
+
+            @if (_loading)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+            }
+            else
+            {
+                <MudList T="LocationDto" Dense="false">
+                    @foreach (var loc in _locations)
+                    {
+                        bool isSelected = State.SelectedLocation?.Name == loc.Name;
+                        <MudListItem OnClick="@(() => SelectLocation(loc))"
+                                     Style="@(isSelected ? "background: #f0fdf4; border-left: 3px solid #22c55e;" : "border-left: 3px solid transparent;")">
+                            <MudText Typo="Typo.subtitle1" Class="font-weight-bold">@loc.Name</MudText>
+                            <MudText Typo="Typo.caption">Rate: $@loc.ElectricityRate.ToString("F4")/kWh | Solar Score: @loc.SolarScore/100</MudText>
+                            <MudText Typo="Typo.caption" Style="color: #6b7280;">@loc.Note</MudText>
+                            @if (isSelected)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mt-1">Selected</MudChip>
+                            }
+                        </MudListItem>
+                        <MudDivider />
+                    }
+                </MudList>
+
+                @if (State.SelectedLocation != null)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" FullWidth="true" Class="mt-3"
+                               OnClick="ClearSelection" StartIcon="@Icons.Material.Filled.Clear">
+                        Clear Selection
+                    </MudButton>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="8">
+        @if (State.SelectedLocation != null)
+        {
+            var loc = State.SelectedLocation;
+            <MudPaper Elevation="2" Class="pa-4 mb-4" Style="border: 2px solid #22c55e;">
+                <MudText Typo="Typo.h6" Class="mb-2">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Style="color: #22c55e;" Class="mr-1" />
+                    Selected: @loc.Name
+                </MudText>
+                <MudGrid>
+                    <MudItem xs="6" sm="3">
+                        <MudText Typo="Typo.caption" Style="color:#6b7280;">Electricity Rate</MudText>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">$@loc.ElectricityRate.ToString("F4")/kWh</MudText>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudText Typo="Typo.caption" Style="color:#6b7280;">Solar Score</MudText>
+                        <MudText Typo="Typo.h6" Class="font-weight-bold">@loc.SolarScore / 100</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.caption" Style="color:#6b7280;">Notes</MudText>
+                        <MudText Typo="Typo.body2">@loc.Note</MudText>
+                    </MudItem>
+                </MudGrid>
+                <MudButton Href="/calculator" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" StartIcon="@Icons.Material.Filled.Calculate">
+                    Use in Calculator
+                </MudButton>
+            </MudPaper>
+        }
+
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">U.S. Map Overview</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3" Style="color:#6b7280;">Click a location from the list to select it. Interactive map requires JavaScript Leaflet integration.</MudText>
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #d1fae5 100%); border-radius: 8px; padding: 40px; text-align: center; position: relative; min-height: 300px;">
+                <MudText Typo="Typo.h4" Style="color: #374151; margin-bottom: 16px;">U.S.A.</MudText>
+                <div style="display: flex; justify-content: center; gap: 32px; flex-wrap: wrap;">
+                    @foreach (var loc in _locations)
+                    {
+                        bool isSelected = State.SelectedLocation?.Name == loc.Name;
+                        <div @onclick="@(() => SelectLocation(loc))" style="cursor: pointer; text-align: center;">
+                            <div style="width: 48px; height: 48px; border-radius: 50%; background: @(isSelected ? "#22c55e" : "#3b82f6"); color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 3px solid @(isSelected ? "#16a34a" : "#2563eb"); box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                                @loc.SolarScore
+                            </div>
+                            <div style="font-size: 12px; margin-top: 4px; font-weight: 600; color: #374151;">@loc.Name</div>
+                            <div style="font-size: 11px; color: #6b7280;">$@loc.ElectricityRate.ToString("F3")</div>
+                        </div>
+                    }
+                </div>
+                <MudText Typo="Typo.caption" Class="mt-4 d-block" Style="color: #9ca3af;">Circle size = solar score | Value = electricity rate</MudText>
+            </div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [SupplyParameterFromQuery(Name = "message")]
+    private string? _message { get; set; }
+
+    private List<LocationDto> _locations = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var locs = await LocationRepository.GetAllAsync();
+        _locations = locs.Select(l => new LocationDto
+        {
+            Id = l.Id,
+            Name = l.Name,
+            Latitude = l.Latitude,
+            Longitude = l.Longitude,
+            ElectricityRate = l.ElectricityRate,
+            SolarScore = l.SolarScore,
+            Note = l.Note
+        }).ToList();
+        _loading = false;
+
+        if (_message == "select-location")
+            _message = "Please select a location to use map-based electricity rates in the calculator.";
+    }
+
+    private void SelectLocation(LocationDto location)
+    {
+        State.SetLocation(location);
+        Snackbar.Add($"{location.Name} selected!", Severity.Success);
+    }
+
+    private void ClearSelection()
+    {
+        State.SetLocation(null);
+        Snackbar.Add("Location cleared.", Severity.Info);
+    }
+}

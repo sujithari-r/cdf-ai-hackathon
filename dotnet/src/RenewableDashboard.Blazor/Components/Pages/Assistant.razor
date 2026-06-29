@@ -1,0 +1,196 @@
+@page "/assistant"
+@rendermode InteractiveServer
+@inject IAssistantService AssistantService
+@inject DashboardStateService State
+
+<PageTitle>AI Assistant - Renewable Dashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">AI Investment Assistant</MudText>
+<MudText Typo="Typo.subtitle1" Class="mb-4" Style="color: #6b7280;">Ask about your renewable energy project using real dashboard data</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="8">
+        <MudPaper Elevation="2" Class="pa-4" Style="min-height: 500px; display: flex; flex-direction: column;">
+            <div style="flex: 1; overflow-y: auto; max-height: 400px; margin-bottom: 16px;" id="chat-container">
+                @if (!_messages.Any())
+                {
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: #9ca3af;">
+                        <MudIcon Icon="@Icons.Material.Filled.SmartToy" Style="font-size: 64px; margin-bottom: 16px;" />
+                        <MudText Typo="Typo.h6">Ask me anything about your project</MudText>
+                        <MudText Typo="Typo.body2">I'll use your calculator results and location data.</MudText>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var msg in _messages)
+                    {
+                        if (msg.IsUser)
+                        {
+                            <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                                <div style="background: #22c55e; color: white; padding: 10px 16px; border-radius: 16px 16px 0 16px; max-width: 80%;">
+                                    <MudText Typo="Typo.body2">@msg.Text</MudText>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-content: flex-start; margin-bottom: 12px;">
+                                <div style="background: #f3f4f6; padding: 10px 16px; border-radius: 16px 16px 16px 0; max-width: 85%;">
+                                    <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@msg.Text</MudText>
+                                </div>
+                            </div>
+                        }
+                    }
+                    @if (_thinking)
+                    {
+                        <div style="display: flex; justify-content: flex-start; margin-bottom: 12px;">
+                            <div style="background: #f3f4f6; padding: 10px 16px; border-radius: 16px 16px 16px 0;">
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <MudDivider Class="mb-3" />
+
+            <div style="display: flex; gap: 8px; align-items: flex-end;">
+                <MudTextField @bind-Value="_question" Label="Ask a question..." Variant="Variant.Outlined" Lines="2"
+                              Style="flex: 1;" @onkeydown="HandleKeyDown" Disabled="@_thinking" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendMessage"
+                           Disabled="@(string.IsNullOrWhiteSpace(_question) || _thinking)"
+                           StartIcon="@Icons.Material.Filled.Send">
+                    Send
+                </MudButton>
+            </div>
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-3 mt-2">
+            <MudText Typo="Typo.caption" Class="mb-2" Style="color: #6b7280;">Suggested Questions</MudText>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                @foreach (var suggestion in _suggestions)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                             OnClick="@(() => UseSuggestion(suggestion))">
+                        @suggestion
+                    </MudChip>
+                }
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="4">
+        <MudPaper Elevation="2" Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Context in Use</MudText>
+            @if (State.SelectedLocation != null)
+            {
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Icon="@Icons.Material.Filled.LocationOn" Class="mb-2">
+                    @State.SelectedLocation.Name
+                </MudChip>
+                <MudText Typo="Typo.body2">Rate: $@State.SelectedLocation.ElectricityRate.ToString("F4")/kWh</MudText>
+                <MudText Typo="Typo.body2">Solar Score: @State.SelectedLocation.SolarScore/100</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Style="color: #6b7280;">No location selected. <MudLink Href="/map">Select on map</MudLink></MudText>
+            }
+
+            <MudDivider Class="my-3" />
+
+            @if (State.CalculatorSnapshot != null)
+            {
+                var snap = State.CalculatorSnapshot;
+                <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Icon="@Icons.Material.Filled.Calculate" Class="mb-2">
+                    Calculator Results
+                </MudChip>
+                <MudText Typo="Typo.body2">NPV: @FormatCurrency(snap.Npv)</MudText>
+                <MudText Typo="Typo.body2">Payback: @(snap.PaybackPeriod?.ToString("F1") ?? "N/A") yrs</MudText>
+                <MudText Typo="Typo.body2">NOI: @FormatCurrency(snap.NetOperatingIncome)</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Style="color: #6b7280;">No calculator results. <MudLink Href="/calculator">Run the calculator</MudLink></MudText>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string _question = string.Empty;
+    private bool _thinking;
+    private List<ChatMessage> _messages = new();
+
+    private readonly List<string> _suggestions = new()
+    {
+        "What is the NPV of my project?",
+        "Is my payback period acceptable?",
+        "How does my location affect returns?",
+        "What are the risks of this project?",
+        "How can I improve my IRR?",
+        "Compare solar vs wind for this location"
+    };
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_question) || _thinking) return;
+
+        var q = _question.Trim();
+        _question = string.Empty;
+        _messages.Add(new ChatMessage(q, true));
+        _thinking = true;
+        StateHasChanged();
+
+        var request = new AssistantRequestDto
+        {
+            Question = q,
+            Context = new AssistantContextDto
+            {
+                SelectedLocation = State.SelectedLocation != null ? new SelectedLocationDto
+                {
+                    Name = State.SelectedLocation.Name,
+                    ElectricityRate = State.SelectedLocation.ElectricityRate,
+                    SolarScore = State.SelectedLocation.SolarScore,
+                    Note = State.SelectedLocation.Note
+                } : null,
+                CalculatorSnapshot = State.CalculatorSnapshot != null ? new CalculatorSnapshotDto
+                {
+                    Scenario = State.LastCalculatorInput?.Scenario ?? "base",
+                    RateMode = State.LastCalculatorInput?.RateMode ?? "manual",
+                    ManualElectricityRate = State.LastCalculatorInput?.ElectricityRate ?? 0,
+                    ActiveElectricityRate = State.CalculatorSnapshot.ActiveElectricityRate,
+                    TotalProjectCost = State.CalculatorSnapshot.TotalProjectCost,
+                    AnnualRevenue = State.CalculatorSnapshot.AnnualRevenue,
+                    NetOperatingIncome = State.CalculatorSnapshot.NetOperatingIncome,
+                    PaybackPeriod = State.CalculatorSnapshot.PaybackPeriod,
+                    Npv = State.CalculatorSnapshot.Npv
+                } : null
+            }
+        };
+
+        var response = await AssistantService.AskAsync(request);
+        _messages.Add(new ChatMessage(response.Answer, false));
+        _thinking = false;
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && e.CtrlKey)
+            await SendMessage();
+    }
+
+    private void UseSuggestion(string suggestion)
+    {
+        _question = suggestion;
+    }
+
+    private static string FormatCurrency(double value)
+    {
+        if (Math.Abs(value) >= 1_000_000)
+            return $"${value / 1_000_000:F1}M";
+        if (Math.Abs(value) >= 1_000)
+            return $"${value / 1_000:F0}K";
+        return $"${value:F0}";
+    }
+
+    private record ChatMessage(string Text, bool IsUser);
+}

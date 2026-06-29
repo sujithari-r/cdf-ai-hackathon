@@ -1,0 +1,39 @@
+## .NET Build artifacts
+bin/
+obj/
+*.user
+.vs/
+*.suo
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+## NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/
+!**/[Pp]ackages/build/
+*.nuspec
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## OS artifacts
+.DS_Store
+Thumbs.db
+
+## Rider
+.idea/
+*.sln.iml
+
+## VS Code
+.vscode/
+
+## User secrets
+**/appsettings.Development.json
+secrets.json
